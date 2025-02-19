@@ -1,3 +1,6 @@
+import os
+os.environ["SCIPY_ARRAY_API"] = "1"  # Add this line before any other imports
+
 # -*- coding: utf-8 -*-
 """
 Created on Mon Feb 12 10:56:41 2024
@@ -362,7 +365,7 @@ attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 solver_lr = ('newton-cg', 'sag')
 
 
-nSimul = 50
+nSimul = 1 # 50 simulations
 
 accuracy_linear_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
 accuracy_linear_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
@@ -434,31 +437,31 @@ for ll in range(len(data_imp)):
         
         for ii in range(len(solver_lr)):
         
-            log_reg = LogisticRegression(random_state=0,penalty='none',solver = solver_lr[ii],max_iter=10000)
+            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_train,y_train)
             accuracy_linear_train[ll,ii,kk] = log_reg.score(X_train,y_train)
             accuracy_linear_test[ll,ii,kk] = log_reg.score(X_test,y_test)
             param_linear_train.append(log_reg.coef_)
             
-            log_reg = LogisticRegression(random_state=0,penalty='none',solver = solver_lr[ii],max_iter=10000)
+            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_choquet_kadd_train,y_train)
             accuracy_choquet_kadd_train[ll,ii,kk] = log_reg.score(X_choquet_kadd_train,y_train)
             accuracy_choquet_kadd_test[ll,ii,kk] = log_reg.score(X_choquet_kadd_test,y_test)
             param_choquet_kadd_train.append(log_reg.coef_)
             
-            log_reg = LogisticRegression(random_state=0,penalty='none',solver = solver_lr[ii],max_iter=10000)
+            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_choquet_train,y_train)
             accuracy_choquet_train[ll,ii,kk] = log_reg.score(X_choquet_train,y_train)
             accuracy_choquet_test[ll,ii,kk] = log_reg.score(X_choquet_test,y_test)
             param_choquet_train.append(log_reg.coef_)
             
-            log_reg = LogisticRegression(random_state=0,penalty='none',solver = solver_lr[ii],max_iter=10000)
+            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_mlm_kadd_train,y_train)
             accuracy_mlm_kadd_train[ll,ii,kk] = log_reg.score(X_mlm_kadd_train,y_train)
             accuracy_mlm_kadd_test[ll,ii,kk] = log_reg.score(X_mlm_kadd_test,y_test)
             param_mlm_kadd_train.append(log_reg.coef_)
             
-            log_reg = LogisticRegression(random_state=0,penalty='none',solver = solver_lr[ii],max_iter=10000)
+            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_mlm_train,y_train)
             accuracy_mlm_train[ll,ii,kk] = log_reg.score(X_mlm_train,y_train)
             accuracy_mlm_test[ll,ii,kk] = log_reg.score(X_mlm_test,y_test)
@@ -467,10 +470,10 @@ for ll in range(len(data_imp)):
                       
             print(ll,'/',len(data_imp),'-',kk,'/',nSimul,'-',ii,'/',len(solver_lr))
             
-exit();
+# exit();
 
 data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
-np.save('results_logistic_all_test.npy', data_save, allow_pickle=True)
+np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
 #accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr = np.load('results_logistic_all.npy', allow_pickle=True)
     
 accuracy_linear_train_mean = np.mean(accuracy_linear_train,axis=2)
@@ -512,11 +515,11 @@ print([accuracy_linear_test_std, accuracy_choquet_test_std, accuracy_choquet_kad
 #covid_param = param_choquet_kadd_train[700:]
 covid_param = param_choquet_kadd_train
 
-lista = np.arange(0,100,2)
+lista = np.arange(0, len(covid_param), 2)  # Only use valid indices
 covid_param_aux = []
-
-for ii in range(len(lista)):
+for ii in lista:
     covid_param_aux.append(covid_param[ii])
+
 
 param_values = np.zeros((len(covid_param_aux),len(covid_param_aux[ii][0])))
 for ii in range(len(covid_param_aux)):
@@ -524,52 +527,78 @@ for ii in range(len(covid_param_aux)):
 covid_param_mean = np.mean(param_values,axis=0)[0:9]
 covid_param_std = np.std(param_values,axis=0)[0:9]
 
+
 import matplotlib.pyplot as plt
 import numpy as np
+import itertools
+import os
 
-names = ['Fever', 'Cough', 'Sore throat', 'Runny nose', 'Myalgia', 'Nausea', 'Diarrhea', 'Loss of smell', 'Shortness of breath']
+# Debug: Print the current working directory
+print("Current working directory:", os.getcwd())
 
-# Ordering
+# Ensure the "plots" folder exists
+os.makedirs("plots", exist_ok=True)
+
+# Define the symptom names
+names = ['Fever', 'Cough', 'Sore throat', 'Runny nose', 'Myalgia', 
+         'Nausea', 'Diarrhea', 'Loss of smell', 'Shortness of breath']
+
+# --- Dummy data for testing (remove if already defined) ---
+# Uncomment these lines if your variables are not defined
+# covid_param_mean = np.random.rand(len(names))
+# covid_param_std = np.random.rand(len(names)) * 0.1
+# nAttr = len(names)
+# param_values = np.random.rand(20, nAttr)  # Adjust shape as needed
+# ---------------------------------------------------------
+
+# Ordering the data
 ordered_indices = np.argsort(covid_param_mean)[::-1]
-names = np.array(names)[ordered_indices]
+names_ordered = np.array(names)[ordered_indices]
 ordered_values = np.array(covid_param_mean)[ordered_indices]
 ordered_std = np.array(covid_param_std)[ordered_indices]
 
-# Figure
+# --- First Plot: Marginal Contribution ---
 fig, ax = plt.subplots(figsize=(10, 8))
-ax.barh(names, ordered_values, xerr=ordered_std, color='blue', edgecolor='black')
+ax.barh(names_ordered, ordered_values, xerr=ordered_std, color='blue', edgecolor='black')
 
-# Ajustando o gráfico
+# Adjusting the plot appearance
 plt.yticks(fontsize=20)
 plt.xticks(fontsize=15)
 ax.set_xlabel('Marginal contribution', fontsize=24)
 ax.grid(True, axis='x', linestyle='--', alpha=0.7)
-
-# Exibindo o gráfico
 plt.tight_layout()
-plt.show()
 
-import itertools
+# Save the plot instead of showing it
+marginal_plot_path = os.path.join("plots", "marginal_contribution.png")
+plt.savefig(marginal_plot_path)
+plt.close()
+print("Saved marginal contribution plot to:", marginal_plot_path)
 
-names = ['Fever', 'Cough', 'Sore throat', 'Runny nose', 'Myalgia', 'Nausea', 'Diarrhea', 'Loss of smell', 'Shortness of breath']
-
+# --- Second Plot: Interaction Effects ---
 sequence = np.arange(nAttr)
 combin = np.array(list(itertools.combinations(sequence, 2)))
-covid_param_inter_mean = np.mean(param_values,axis=0)[9:]
+covid_param_inter_mean = np.mean(param_values, axis=0)[9:]
 
-plot_aux = np.zeros((nAttr,nAttr))
+plot_aux = np.zeros((nAttr, nAttr))
 for ll in range(combin.shape[0]):
-    plot_aux[combin[ll,0],combin[ll,1]] = covid_param_inter_mean[ll]
+    plot_aux[combin[ll, 0], combin[ll, 1]] = covid_param_inter_mean[ll]
 plot_aux = plot_aux + plot_aux.T
-plt.figure(3)
+
+plt.figure(figsize=(8, 6))
 plt.imshow(plot_aux)
 plt.colorbar(orientation="vertical")
 pos = np.arange(len(names))
 plt.yticks(pos, names)
 plt.xticks(pos, names, rotation=90)
-title = 'Interaction effects among symptoms'
-plt.title(title)
-plt.show()
+plt.title("Interaction effects among symptoms")
+
+# Save the second plot
+interaction_plot_path = os.path.join("plots", "interaction_effects.png")
+plt.savefig(interaction_plot_path)
+plt.close()
+print("Saved interaction effects plot to:", interaction_plot_path)
+
+
 
 # Interpreting odds change
 aa=pd.DataFrame([1,1,0,0,1,0,0,0,0]).T
