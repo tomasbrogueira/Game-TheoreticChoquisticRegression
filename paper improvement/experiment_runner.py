@@ -17,7 +17,7 @@ def ensure_folder(folder):
         os.makedirs(folder)
 
 # Import our organized Choquistic module and the data reader module.
-from paper_improve import ChoquisticRegression, ChoquetTransformer
+from root_CR import ChoquisticRegression
 import mod_GenFuzzyRegression as modGF
 
 def run_experiment(

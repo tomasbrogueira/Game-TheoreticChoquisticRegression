@@ -290,3 +290,57 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
                     weight = (factorial(m - r - 1) * factorial(r)) / denom
                     phi[j] += weight * (vBj - vB)
         return phi
+
+
+
+
+
+
+
+# Interpretability functions
+
+from math import factorial
+
+
+def compute_shapley_values_explicit(v, m, all_coalitions):
+    """
+    Compute Shapley values explicitly given learned coefficients v, number of features m,
+    and the list of all nonempty coalitions (in a fixed order).
+    """
+    phi = np.zeros(m)
+    denom = factorial(m)
+    for j in range(m):
+        # Iterate over all subsets B of M without j.
+        for r in range(0, m):
+            for B in itertools.combinations([i for i in range(m) if i != j], r):
+                # v(B) is taken as 0 for empty set, otherwise lookup in all_coalitions
+                vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
+                # B ∪ {j}
+                Bj = tuple(sorted(B + (j,)))
+                try:
+                    vBj = v[all_coalitions.index(Bj)]
+                except ValueError:
+                    continue
+                weight = factorial(m - r - 1) * factorial(r) / denom
+                phi[j] += weight * (vBj - vB)
+    return phi
+
+
+def compute_banzhaf_indices(v, m, all_coalitions):
+    """
+    Compute Banzhaf indices explicitly given learned coefficients v, number of features m,
+    and the list of all nonempty coalitions (in a fixed order).
+    """
+    phi_b = np.zeros(m)
+    norm = 2 ** (m - 1)
+    for j in range(m):
+        for r in range(0, m):
+            for B in itertools.combinations([i for i in range(m) if i != j], r):
+                vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
+                Bj = tuple(sorted(B + (j,)))
+                try:
+                    vBj = v[all_coalitions.index(Bj)]
+                except ValueError:
+                    continue
+                phi_b[j] += (vBj - vB)
+    return phi_b / norm
