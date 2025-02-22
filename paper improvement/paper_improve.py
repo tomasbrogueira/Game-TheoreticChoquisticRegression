@@ -7,7 +7,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# --- Utility functions for k-additive models ---
+# --- Utility functions for k-additive models (if needed) ---
 
 def nParam_kAdd(kAdd, nAttr):
     """Return the number of parameters in a k-additive model for nAttr attributes."""
@@ -24,37 +24,37 @@ def powerset(iterable, k_add):
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(0, k_add+1))
 
-# --- Choquet / Multilinear Transformation Functions ---
+# --- Choquet Transformation Functions ---
 
 def choquet_matrix(X_orig):
     """
     Compute the full Choquet integral transformation (general version).
     WARNING: This version is computationally feasible only for small nAttr.
     
-    For each sample, the transformation computes differences between ordered values.
+    For each sample, the transformation computes differences between consecutive ordered values.
+    Returns both the transformed feature matrix (of shape (n_samples, 2**nAttr - 1)) and a
+    list of all nonempty coalitions in a fixed order.
     """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape
-    # Sort features for each sample (rowwise)
-    X_sorted = np.sort(X_orig, axis=1)
-    X_sort_ext = np.concatenate((np.zeros((nSamp, 1)), X_sorted), axis=1)
-    # Build list of all nonempty subsets (each represented as a tuple of indices)
+    # For a fixed ordering of coalitions, we consider all nonempty subsets of {0, 1, ..., nAttr-1}
     all_coalitions = []
     for r in range(1, nAttr+1):
         all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
     nParams = len(all_coalitions)
     data_opt = np.zeros((nSamp, nParams))
-    # For each sample, use its sorted order to assign differences to the corresponding coalition.
-    # (This is a direct but not highly efficient implementation.)
+    # For each sample, we first sort the features in ascending order.
+    # Then, for j=0,..., nAttr-1, we assign the difference between the j-th and previous value
+    # to the coalition corresponding to the set of indices from the sorted order starting at j.
     for i in range(nSamp):
-        # Get the order of the features for sample i
         order = np.argsort(X_orig[i])
         sorted_vals = np.sort(X_orig[i])
         prev = 0.0
         for j in range(nAttr):
-            # Coalition: indices in the original order from current sorted index to the end
+            # The coalition is defined as the set of original indices corresponding to the j-th 
+            # smallest value and all larger ones.
             coalition = tuple(sorted(order[j:]))
-            # Find the index of this coalition in our list
+            # Find the index in our fixed ordering:
             try:
                 idx = all_coalitions.index(coalition)
             except ValueError:
@@ -62,17 +62,15 @@ def choquet_matrix(X_orig):
             diff = sorted_vals[j] - prev
             prev = sorted_vals[j]
             data_opt[i, idx] = diff
-    return data_opt
+    return data_opt, all_coalitions
 
 def choquet_matrix_2add(X_orig):
     """
     Compute the 2-additive Choquet integral transformation.
     
     For each sample, we create features corresponding to:
-      - the original (singleton) features,
-      - and for each pair (i,j), the value min(x_i, x_j).
-    
-    (Additional adjustments from the paper can be incorporated as needed.)
+      - the original (singleton) features, and
+      - for each pair (i,j), the value min(x_i, x_j), with appropriate adjustments.
     """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape
@@ -80,7 +78,7 @@ def choquet_matrix_2add(X_orig):
     n_pairs = comb(nAttr, 2)
     nParams = n_singletons + n_pairs
     data_opt = np.zeros((nSamp, nParams))
-    # Singleton features: copy original features
+    # Singleton features: use the original features.
     data_opt[:, :n_singletons] = X_orig
     # Pairwise features: for each pair (i, j), use min(x_i, x_j)
     idx = n_singletons
@@ -94,13 +92,12 @@ def mlm_matrix(X_orig):
     """
     Compute the multilinear model transformation.
     
-    For each nonempty subset of features, compute the product:
-        prod_{i in subset} x_i * prod_{j not in subset} (1-x_j)
+    For each nonempty subset of features, compute:
+        prod_{i in subset} x_i * prod_{j not in subset} (1 - x_j)
     (This transformation grows exponentially with nAttr.)
     """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape
-    # Exclude empty set
     subsets = list(chain.from_iterable(combinations(range(nAttr), r) for r in range(1, nAttr+1)))
     nParams = len(subsets)
     data_opt = np.zeros((nSamp, nParams))
@@ -140,7 +137,7 @@ def mlm_matrix_2add(X_orig):
 
 class ChoquetTransformer(BaseEstimator, TransformerMixin):
     """
-    Transformer for Choquet/multilinear based feature transformations.
+    Transformer for Choquet or multilinear based feature transformations.
     
     Parameters
     ----------
@@ -156,11 +153,19 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         
     def fit(self, X, y=None):
         self.n_features_in_ = X.shape[1]
+        # For the full choquet method, precompute and store the fixed ordering (all coalitions)
+        if self.method == "choquet":
+            _, all_coalitions = choquet_matrix(X)
+            self.all_coalitions_ = all_coalitions
         return self
     
     def transform(self, X):
         if self.method == "choquet":
-            return choquet_matrix(X)
+            X_trans, all_coalitions = choquet_matrix(X)
+            # In case fit wasn't called, store ordering now.
+            if not hasattr(self, "all_coalitions_"):
+                self.all_coalitions_ = all_coalitions
+            return X_trans
         elif self.method == "choquet_2add":
             return choquet_matrix_2add(X)
         elif self.method == "mlm":
@@ -174,8 +179,8 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
     """
     Choquistic Regression classifier.
     
-    This estimator first applies a Choquet (or multilinear) integral based transformation
-    to the input features and then performs logistic regression on the transformed features.
+    This estimator first optionally scales the input data, then applies a Choquet (or multilinear) 
+    transformation, and finally fits a LogisticRegression classifier.
     
     Parameters
     ----------
@@ -237,3 +242,51 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
             self.transformer_.transform(self.scaler_.transform(X)) if self.scale_data else self.transformer_.transform(X),
             y
         )
+    
+    def compute_shapley_values(self):
+        """
+        Compute the Shapley values (marginal contributions) for each feature based on the learned
+        game parameters. This method is implemented only for the full "choquet" method.
+        
+        Returns
+        -------
+        phi : ndarray of shape (n_features,)
+            The Shapley value for each feature.
+        """
+        if self.method != "choquet":
+            raise ValueError("Shapley value computation is only implemented for the full 'choquet' method.")
+        # Get the number of features.
+        m = self.transformer_.n_features_in_
+        # Get the fixed list of coalitions (each is a tuple of feature indices).
+        all_coalitions = self.transformer_.all_coalitions_
+        # Get the learned coefficients (v) from logistic regression.
+        # Here we assume a single-output classifier and take the first row.
+        v = self.classifier_.coef_[0]
+        # Compute the factorial denominator.
+        from math import factorial
+        denom = factorial(m)
+        phi = np.zeros(m)
+        # For each feature j, sum over all subsets B ⊆ M\{j}
+        for j in range(m):
+            # Iterate over all subsets of M without feature j.
+            for r in range(0, m):  # r = |B|
+                # All subsets B of size r that do not contain j.
+                for B in itertools.combinations([i for i in range(m) if i != j], r):
+                    # v(B) is 0 if B is empty; otherwise, find its coefficient.
+                    if len(B) == 0:
+                        vB = 0.0
+                    else:
+                        try:
+                            vB = v[all_coalitions.index(tuple(sorted(B)))]
+                        except ValueError:
+                            # If not found, skip (should not occur)
+                            continue
+                    # v(B U {j}) must exist (B U {j} is nonempty)
+                    Bj = tuple(sorted(B + (j,)))
+                    try:
+                        vBj = v[all_coalitions.index(Bj)]
+                    except ValueError:
+                        continue
+                    weight = (factorial(m - r - 1) * factorial(r)) / denom
+                    phi[j] += weight * (vBj - vB)
+        return phi

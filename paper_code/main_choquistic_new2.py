@@ -365,7 +365,7 @@ attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 solver_lr = ('newton-cg', 'sag')
 
 
-nSimul = 1 # 50 simulations
+nSimul = 50 # 50 simulations
 
 accuracy_linear_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
 accuracy_linear_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
