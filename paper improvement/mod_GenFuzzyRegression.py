@@ -32,7 +32,7 @@ def func_read_data(data_imp):
         
     elif data_imp == 'transfusion':
         " Blood Transfusion Service Center Data Set dataset - UCI "
-        file_path = os.path.join(data_dir, 'data_transfusion.data')
+        file_path = os.path.join(data_dir, 'transfusion.csv')
         dataset = pd.read_csv(file_path)
         vals = dataset.values
         X = dataset.iloc[:, 0:-1]
@@ -69,7 +69,7 @@ def func_read_data(data_imp):
         
     elif data_imp == 'diabetes':
         " Diabetes (PIMA) dataset "
-        file_path = os.path.join(data_dir, 'data_diabetes_pima.csv')
+        file_path = os.path.join(data_dir, 'diabetes.csv')
         dataset = pd.read_csv(file_path)
         vals = dataset.values
         X = dataset.drop('Outcome', axis=1)
@@ -103,8 +103,8 @@ def func_read_data(data_imp):
         
     elif data_imp == 'skin':
         " Skin segmentation dataset - UCI "
-        file_path = os.path.join(data_dir, 'data_skin.xlsx')
-        dataset = pd.read_excel(file_path)
+        file_path = os.path.join(data_dir, 'data_skin.csv')
+        dataset = pd.read_csv(file_path)
         X = dataset.loc[:, dataset.columns != 'Class']
         vals = dataset.values
         y = vals[:, -1] - 1
