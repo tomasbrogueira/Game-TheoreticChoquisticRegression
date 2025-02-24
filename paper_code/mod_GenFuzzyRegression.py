@@ -17,7 +17,7 @@ def func_read_data(data_imp):
         
     if data_imp == 'transfusion':
         " Blood Transfusion Service Center Data Set dataset - UCI "
-        dataset = pd.read_csv('data_transfusion.data')
+        dataset = pd.read_csv('transfusion.csv')
         vals = dataset.values
         X = dataset.iloc[:, 0:-1]
         y = vals[:,-1]
@@ -51,7 +51,7 @@ def func_read_data(data_imp):
         
     if data_imp == 'diabetes':
         " Diabetes (PIMA) dataset "
-        dataset = pd.read_csv('data_diabetes_pima.csv')
+        dataset = pd.read_csv('diabetes.csv')
         vals = dataset.values
         X = dataset.drop('Outcome', axis=1)
         y = dataset['Outcome']
@@ -83,7 +83,7 @@ def func_read_data(data_imp):
         
     if data_imp == 'skin':
         " Skin segmentation dataset - UCI "
-        dataset = pd.read_excel('data_skin.xlsx')
+        dataset = pd.read_csv('data_skin.csv')
         X = dataset.loc[:, dataset.columns!='Class']
         vals = dataset.values
         y = vals[:,-1] - 1

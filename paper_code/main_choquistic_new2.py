@@ -354,9 +354,9 @@ def diff(first, second):
 # X and y are the full dataset; X_hsic and y_hsic are the subsamples to calculate HSIC
 #data_imp = 'raisin'
 #data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','wine','compas','lsac_new','skin','dados_covid_sbpo'])
-#data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo'])
+data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
 #data_imp = list(['covid_gamma','covid_delta','covid_omicron','dados_covid_sbpo'])
-data_imp = list(['dados_covid_sbpo_atual'])
+#data_imp = list(['dados_covid_sbpo_atual'])
 
 attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 
@@ -468,7 +468,7 @@ for ll in range(len(data_imp)):
             param_mlm_train.append(log_reg.coef_)
             
                       
-            print(ll,'/',len(data_imp),'-',kk,'/',nSimul,'-',ii,'/',len(solver_lr))
+            print(ll+1,'/',len(data_imp),'-',kk,'/',nSimul,'-',ii+1,'/',len(solver_lr))
             
 # exit();
 
@@ -511,7 +511,10 @@ print([accuracy_linear_train_std, accuracy_choquet_train_std, accuracy_choquet_k
 
 print([accuracy_linear_test_mean, accuracy_choquet_test_mean, accuracy_choquet_kadd_test_mean, accuracy_mlm_test_mean, accuracy_mlm_kadd_test_mean])
 print([accuracy_linear_test_std, accuracy_choquet_test_std, accuracy_choquet_kadd_test_std, accuracy_mlm_test_std, accuracy_mlm_kadd_test_mean])
-    
+
+
+exit();
+
 #covid_param = param_choquet_kadd_train[700:]
 covid_param = param_choquet_kadd_train
 
