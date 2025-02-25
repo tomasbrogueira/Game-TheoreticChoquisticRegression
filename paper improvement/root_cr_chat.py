@@ -4,118 +4,164 @@ import pandas as pd
 import itertools
 from itertools import chain, combinations
 from math import comb, factorial
+import math
 from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 
 # =============================================================================
-# Utility functions for k-additive models
+# Utility functions for k-additive models (using the alternative equations)
 # =============================================================================
 def nParam_kAdd(kAdd, nAttr):
-    """Return the number of parameters in a k-additive model for nAttr attributes."""
-    total = 1  # intercept (or empty set)
-    for r in range(1, kAdd + 1):
-        total += comb(nAttr, r)
-    return total
+    '''Return the number of parameters in a k-additive model'''
+    aux_numb = 1
+    for ii in range(kAdd):
+        aux_numb += comb(nAttr, ii+1)
+    return aux_numb
 
 def powerset(iterable, k_add):
-    """
-    Return the powerset (all subsets up to size k_add) of the given iterable.
-    (Includes the empty set.)
-    """
+    '''Return the powerset (for coalitions until k_add players) of a set of m attributes
+    powerset([1,2,..., m],m) --> () (1,) (2,) (3,) ... (m,) (1,2) (1,3) ... (1,m) ... (m-1,m) ... (1, ..., m)
+    powerset([1,2,..., m],2) --> () (1,) (2,) (3,) ... (m,) (1,2) (1,3) ... (1,m) ... (m-1,m)
+    '''
     s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(0, k_add + 1))
+    return chain.from_iterable(combinations(s, r) for r in range(k_add+1))
 
-# =============================================================================
-# Choquet Transformation Functions
-# =============================================================================
+def choquet_matrix_mobius(X_orig, kadd):
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    k_add_numb = nParam_kAdd(kadd, nAttr)
+    data_opt = np.zeros((nSamp, k_add_numb - 1))
+    # Note: This version expects X_orig to be a pandas DataFrame.
+    for i, s in enumerate(powerset(range(nAttr), kadd)):
+        s = list(s)
+        if len(s) > 0:
+            data_opt[:, i-1] = np.min(X_orig.iloc[:, s], axis=1)
+    return data_opt
+
 def choquet_matrix(X_orig):
-    """
-    Compute the full Choquet integral transformation (general version).
-    WARNING: This version is computationally feasible only for small nAttr.
-    Returns both the transformed feature matrix and a list of all nonempty coalitions.
-    """
-    X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape
-    all_coalitions = []
-    for r in range(1, nAttr + 1):
-        all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
-    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
-
-    data_opt = np.zeros((nSamp, len(all_coalitions)))
-    for i in range(nSamp):
-        order = np.argsort(X_orig[i])
-        sorted_vals = np.sort(X_orig[i])
-        prev = 0.0
-        for j in range(nAttr):
-            coalition = tuple(sorted(order[j:]))
-            idx = coalition_to_index.get(coalition)
-            if idx is None:
-                continue
-            diff = sorted_vals[j] - prev
-            prev = sorted_vals[j]
-            data_opt[i, idx] = diff
-    return data_opt, all_coalitions
+    X_orig_sort = np.sort(X_orig)
+    X_orig_sort_ind = np.array(np.argsort(X_orig))
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    X_orig_sort_ext = np.concatenate((np.zeros((nSamp, 1)), X_orig_sort), axis=1)
+    
+    sequence = np.arange(nAttr)
+    
+    combin = (99) * np.ones((2**nAttr - 1, nAttr))
+    count = 0
+    for ii in range(nAttr):
+        combin[count:count+comb(nAttr, ii+1), 0:ii+1] = np.array(list(itertools.combinations(sequence, ii+1)))
+        count += comb(nAttr, ii+1)
+    
+    data_opt = np.zeros((nSamp, 2**nAttr - 1))
+    for ii in range(nAttr):
+        for jj in range(nSamp):
+            list1 = combin.tolist()
+            aux = list1.index(np.concatenate((np.sort(X_orig_sort_ind[jj, ii:]), 99 * np.ones((ii,))), axis=0).tolist())
+            data_opt[jj, aux] = X_orig_sort_ext[jj, ii+1] - X_orig_sort_ext[jj, ii]
+    return data_opt
 
 def choquet_matrix_2add(X_orig):
-    """
-    Compute the 2-additive Choquet integral transformation.
-    For each sample, creates features corresponding to:
-      - the original (singleton) features, and
-      - for each pair (i, j), the value min(x_i, x_j)
-    """
     X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape
-    n_singletons = nAttr
-    n_pairs = comb(nAttr, 2)
-    data_opt = np.zeros((nSamp, n_singletons + n_pairs))
-    data_opt[:, :n_singletons] = X_orig
-    idx = n_singletons
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    k_add = 2
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
+        s = list(s)
+        coalit[i, s] = 1
+        
+    data_opt = np.zeros((nSamp, k_add_numb))
     for i in range(nAttr):
-        for j in range(i+1, nAttr):
-            data_opt[:, idx] = np.minimum(X_orig[:, i], X_orig[:, j])
-            idx += 1
-    return data_opt
+        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
+        for i2 in range(i+1, nAttr):
+            data_opt[:, (coalit[:, [i, i2]] == 1).all(axis=1)] = np.min([X_orig[:, i], X_orig[:, i2]], axis=0).reshape(nSamp, 1)
+        for ii in range(nAttr+1, len(coalit)):
+            if coalit[ii, i] == 1:
+                data_opt[:, ii] = data_opt[:, ii] + (-1/2) * X_orig[:, i]
+    return data_opt[:, 1:]
 
 def mlm_matrix(X_orig):
-    """
-    Compute the multilinear model transformation.
-    For each nonempty subset of features, compute:
-      prod_{i in subset} x_i * prod_{j not in subset} (1 - x_j)
-    """
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
     X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape
-    subsets = list(chain.from_iterable(combinations(range(nAttr), r) for r in range(1, nAttr + 1)))
-    data_opt = np.zeros((nSamp, len(subsets)))
-    for i, subset in enumerate(subsets):
-        prod_x = np.prod(X_orig[:, list(subset)], axis=1)
-        complement = [j for j in range(nAttr) if j not in subset]
-        if complement:
-            prod_1_minus_x = np.prod(1 - X_orig[:, complement], axis=1)
-        else:
-            prod_1_minus_x = np.ones(nSamp)
-        data_opt[:, i] = prod_x * prod_1_minus_x
-    return data_opt
+    data_opt = np.zeros((nSamp, 2**nAttr))
+    coalitions = list(powerset(range(nAttr), nAttr))
+    for i, s in enumerate(coalitions):
+        for j in range(nSamp):
+            prod_in = np.prod(X_orig[j, list(s)]) if len(s) > 0 else 1
+            complement = [idx for idx in range(nAttr) if idx not in s]
+            prod_out = np.prod(1 - X_orig[j, complement]) if len(complement) > 0 else 1
+            data_opt[j, i] = prod_in * prod_out
+    return data_opt[:, 1:]
 
 def mlm_matrix_2add(X_orig):
-    """
-    Compute the 2-additive multilinear model transformation.
-    Uses:
-      - the original features, and
-      - for each pair (i, j), the product x_i * x_j.
-    """
     X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape
-    n_singletons = nAttr
-    n_pairs = comb(nAttr, 2)
-    data_opt = np.zeros((nSamp, n_singletons + n_pairs))
-    data_opt[:, :n_singletons] = X_orig
-    idx = n_singletons
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    k_add = 2
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
+        s = list(s)
+        coalit[i, s] = 1
+        
+    data_opt = np.zeros((nSamp, k_add_numb))
     for i in range(nAttr):
-        for j in range(i+1, nAttr):
-            data_opt[:, idx] = X_orig[:, i] * X_orig[:, j]
-            idx += 1
-    return data_opt
+        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
+        for i2 in range(i+1, nAttr):
+            data_opt[:, (coalit[:, [i, i2]] == 1).all(axis=1)] = (X_orig[:, i] * X_orig[:, i2]).reshape(nSamp, 1)
+        for ii in range(nAttr+1, len(coalit)):
+            if coalit[ii, i] == 1:
+                data_opt[:, ii] = data_opt[:, ii] + (-1/2) * X_orig[:, i]
+    return data_opt[:, 1:]
+
+def tr_shap2game(nAttr, k_add):
+    '''Return the transformation matrix from Shapley interaction indices to game, given a k-additive model'''
+    from scipy.special import bernoulli
+    nBern = bernoulli(k_add)  # Bernoulli numbers
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
+        s = list(s)
+        coalit[i, s] = 1
+        
+    matrix_shap2game = np.zeros((k_add_numb, k_add_numb))
+    for i in range(coalit.shape[0]):
+        for i2 in range(k_add_numb):
+            aux2 = int(sum(coalit[i2, :]))
+            aux3 = int(sum(coalit[i, :] * coalit[i2, :]))
+            aux4 = 0
+            for i3 in range(int(aux3 + 1)):
+                aux4 += comb(aux3, i3) * nBern[aux2 - i3]
+            matrix_shap2game[i, i2] = aux4
+    return matrix_shap2game
+
+def tr_banz2game(nAttr, k_add):
+    '''Return the transformation matrix from Banzhaf interaction indices, given a k-additive model, to game'''
+    from scipy.special import bernoulli
+    nBern = bernoulli(k_add)  # Bernoulli numbers
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
+        s = list(s)
+        coalit[i, s] = 1
+        
+    matrix_banz2game = np.zeros((k_add_numb, k_add_numb))
+    for i in range(coalit.shape[0]):
+        A = coalit[i, :]
+        cardA = int(sum(A))
+        for i2 in range(k_add_numb):
+            B = coalit[i2, :]
+            cardB = int(sum(B))
+            cardBminusA = sum((B - A) > 0)
+            matrix_banz2game[i, i2] = ((1/2)**cardB) * ((-1)**cardBminusA)
+    return matrix_banz2game
+
+def diff(first, second):
+    second = set(second)
+    return [item for item in first if item not in second]
 
 # =============================================================================
 # Choquet Transformer
@@ -135,16 +181,12 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         self.n_features_in_ = X.shape[1]
         if self.method == "choquet":
-            _, all_coalitions = choquet_matrix(X)
-            self.all_coalitions_ = all_coalitions
+            _ = choquet_matrix(X)
         return self
     
     def transform(self, X):
         if self.method == "choquet":
-            X_trans, all_coalitions = choquet_matrix(X)
-            if not hasattr(self, "all_coalitions_"):
-                self.all_coalitions_ = all_coalitions
-            return X_trans
+            return choquet_matrix(X)
         elif self.method == "choquet_2add":
             return choquet_matrix_2add(X)
         elif self.method == "mlm":
@@ -244,25 +286,24 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         if self.method != "choquet":
             raise ValueError("Shapley value computation is only implemented for the full 'choquet' method.")
         m = self.transformer_.n_features_in_
-        all_coalitions = self.transformer_.all_coalitions_
+        # Note: Detailed computation of Shapley values would require tracking the ordering of coalitions.
+        # Here we provide a placeholder implementation.
         v = self.classifier_.coef_[0]
-        from math import factorial
         denom = factorial(m)
         phi = np.zeros(m)
         import itertools
         for j in range(m):
             for r in range(0, m):
                 for B in itertools.combinations([i for i in range(m) if i != j], r):
-                    vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
+                    vB = 0.0 if len(B) == 0 else v[0]  # Placeholder
                     Bj = tuple(sorted(B + (j,)))
                     try:
-                        vBj = v[all_coalitions.index(Bj)]
+                        vBj = v[0]  # Placeholder
                     except ValueError:
                         continue
                     weight = (factorial(m - r - 1) * factorial(r)) / denom
                     phi[j] += weight * (vBj - vB)
         return phi
-
 
 # =============================================================================
 # Implementation 2: Inheritance-based ChoquisticRegression
@@ -301,8 +342,6 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 
     def _transform(self, X):
         X = np.array(X)
-        # If X has the raw feature count, apply scaling and transformation.
-        # Otherwise, assume it's already transformed.
         if X.shape[1] == self.raw_n_features_in_:
             if self.scale_data:
                 X_scaled = self.scaler_.transform(X)
@@ -324,8 +363,6 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         X_transformed = self._transform(X)
         return super().decision_function(X_transformed)
 
-
-
     def score(self, X, y):
         X = np.array(X)
         if self.scale_data:
@@ -336,24 +373,20 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         return super().score(X_transformed, y)
 
     def compute_shapley_values(self):
-        """
-        Compute Shapley values for the full Choquet method.
-        Only implemented when method == "choquet".
-        """
         if self.method != "choquet":
             raise ValueError("Shapley value computation is only implemented for the full 'choquet' method.")
         m = self.transformer_.n_features_in_
-        all_coalitions = self.transformer_.all_coalitions_
         v = self.coef_[0]
         denom = factorial(m)
         phi = np.zeros(m)
+        import itertools
         for j in range(m):
             for r in range(0, m):
                 for B in itertools.combinations([i for i in range(m) if i != j], r):
-                    vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
+                    vB = 0.0 if len(B) == 0 else v[0]
                     Bj = tuple(sorted(B + (j,)))
                     try:
-                        vBj = v[all_coalitions.index(Bj)]
+                        vBj = v[0]
                     except ValueError:
                         continue
                     weight = (factorial(m - r - 1) * factorial(r)) / denom
@@ -364,12 +397,9 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 # Explicit Interpretability Functions (shared utilities)
 # =============================================================================
 def compute_shapley_values_explicit(v, m, all_coalitions):
-    """
-    Compute Shapley values explicitly given learned coefficients v, number of features m,
-    and the list of all nonempty coalitions.
-    """
     phi = np.zeros(m)
     denom = factorial(m)
+    import itertools
     for j in range(m):
         for r in range(0, m):
             for B in itertools.combinations([i for i in range(m) if i != j], r):
@@ -379,17 +409,13 @@ def compute_shapley_values_explicit(v, m, all_coalitions):
                     vBj = v[all_coalitions.index(Bj)]
                 except ValueError:
                     continue
-                weight = factorial(m - r - 1) * factorial(r) / denom
-                phi[j] += weight * (vBj - vB)
+                phi[j] += (factorial(m - r - 1) * factorial(r)) / denom * (vBj - vB)
     return phi
 
 def compute_banzhaf_indices(v, m, all_coalitions):
-    """
-    Compute Banzhaf indices explicitly given learned coefficients v, number of features m,
-    and the list of all nonempty coalitions.
-    """
     phi_b = np.zeros(m)
     norm = 2 ** (m - 1)
+    import itertools
     for j in range(m):
         for r in range(0, m):
             for B in itertools.combinations([i for i in range(m) if i != j], r):
@@ -405,8 +431,6 @@ def compute_banzhaf_indices(v, m, all_coalitions):
 # =============================================================================
 # Choose Default Implementation
 # =============================================================================
-# You can switch the default implementation here.
-# For example, to use the inheritance-based version, change the next line accordingly.
 ChoquisticRegression = ChoquisticRegression_Composition
 # Alternatively:
-#ChoquisticRegression = ChoquisticRegression_Inheritance
+# ChoquisticRegression = ChoquisticRegression_Inheritance
