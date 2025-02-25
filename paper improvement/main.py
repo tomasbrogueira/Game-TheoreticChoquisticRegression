@@ -12,11 +12,10 @@ for dataset in datasets:
         random_state=0,
         n_simulations=1,  # set the number of simulation runs here
         solver_lr='newton-cg',
-        baseline_max_iter=10000,
-        baseline_logistic_params={'penalty': None},
-        choq_logistic_params={'penalty': None},
+        baseline_max_iter=1000,
+        penalty_lr=None,
         methods=["choquet_2add", "choquet", "mlm_2add", "mlm"],
-        scale_data=True,
+        scale_data=False,
         plot_folder="plots",
         results_filename="results.pkl",
         log_odds_bins=30

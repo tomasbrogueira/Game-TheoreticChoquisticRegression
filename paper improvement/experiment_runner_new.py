@@ -24,10 +24,11 @@ def run_experiment(
     test_size=0.2,
     random_state=0,
     n_simulations=1,
-    solver_lr=('newton-cg', 'sag'),
-    baseline_max_iter=1000,
-    baseline_logistic_params=None,
-    choq_logistic_params=None,
+    solver_lr=None,
+    penalty_lr=None,
+    baseline_max_iter=None,
+    baseline_logistic_params={'penalty': None, 'max_iter': 1000, 'random_state': 0, 'solver': 'newton-cg'},
+    choq_logistic_params={'penalty': None, 'max_iter': 1000, 'random_state': 0, 'solver': 'newton-cg'},
     methods=["choquet_2add", "choquet", "mlm", "mlm_2add"],
     scale_data=True,
     plot_folder="plots",
@@ -60,12 +61,18 @@ def run_experiment(
     Returns:
       - final_results: dictionary with accuracy scores, coefficients, and other relevant data
     """
-    # Set defaults if parameters are None
-    if baseline_logistic_params is None:
-        baseline_logistic_params = {'penalty': None, 'solver': 'newton-cg', 'max_iter': baseline_max_iter, 'random_state': random_state}
-    if choq_logistic_params is None:
-        choq_logistic_params = {'penalty': None, 'solver': 'newton-cg', 'max_iter': baseline_max_iter, 'random_state': random_state}
+    # Change parameters in case of input
+    if solver_lr is not None:
+        baseline_logistic_params['solver'] = solver_lr
+        choq_logistic_params['solver'] = solver_lr
+    if baseline_max_iter is not None:
+        baseline_logistic_params['max_iter'] = baseline_max_iter
+        choq_logistic_params['max_iter'] = baseline_max_iter
+    if penalty_lr is not None:
+        baseline_logistic_params['penalty'] = penalty_lr
+        choq_logistic_params['penalty'] = penalty_lr
     
+
     ensure_folder(plot_folder)
     
     # 1. Load and normalize the data (raw data expected)
@@ -87,13 +94,15 @@ def run_experiment(
         print(f"\nSimulation {sim+1}/{n_simulations}")
         sim_seed = random_state + sim
         
-        # 2. Split data into train/test sets
+       # 2. Split data into train/test sets
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, stratify=y, random_state=sim_seed
         )
-        
+
         # 3. Baseline Logistic Regression on raw features
-        lr_baseline = LogisticRegression(random_state=sim_seed, max_iter=baseline_max_iter, **baseline_logistic_params)
+        baseline_params = baseline_logistic_params.copy()
+        baseline_params['random_state'] = sim_seed  # Set simulation-specific seed
+        lr_baseline = LogisticRegression(**baseline_params)
         lr_baseline.fit(X_train, y_train)
         baseline_train_acc = lr_baseline.score(X_train, y_train)
         baseline_test_acc  = lr_baseline.score(X_test, y_test)
@@ -103,31 +112,30 @@ def run_experiment(
             'test_acc': baseline_test_acc,
             'coef': lr_baseline.coef_
         }
-        
+
         # 4. Run Choquistic Models using various transformations
         for method in methods:
             print("Processing method:", method)
-            # For mlm methods, adjust logistic parameters for convergence.
-            if method in ["mlm", "mlm_2add"]:
-                method_logistic_params = choq_logistic_params.copy()
-            else:
-                method_logistic_params = choq_logistic_params
-            model = ChoquisticRegression(method=method, 
-                                         logistic_params=method_logistic_params,
-                                         scale_data=scale_data,
-                                         random_state=sim_seed)
+            method_logistic_params = choq_logistic_params.copy()
+            method_logistic_params['random_state'] = sim_seed
+            model = ChoquisticRegression(
+                method=method, 
+                logistic_params=method_logistic_params,
+                scale_data=scale_data,
+                random_state=sim_seed
+            )
             model.fit(X_train, y_train)
             train_acc = model.score(X_train, y_train)
             test_acc  = model.score(X_test, y_test)
-            # For composition-based models, coefficients are stored in classifier_.coef_;
-            # for inheritance-based, they are in model.coef_.
+            # For composition-based implementations the coefficients are stored in classifier_.coef_;
+            # for inheritance-based they are in model.coef_.
             coef = model.classifier_.coef_ if hasattr(model, "classifier_") else model.coef_
             sim_results[method] = {
                 'train_acc': train_acc,
                 'test_acc': test_acc,
                 'coef': coef
             }
-            # Compute Shapley values only for full choquet method.
+            # Compute Shapley values only for full choquet methods.
             if method in ["choquet", "choquet_2add"]:
                 try:
                     shapley_vals = model.compute_shapley_values()
@@ -137,12 +145,14 @@ def run_experiment(
                 except Exception as e:
                     print("Could not compute shapley values for {}: {}".format(method, e))
             print("Method: {:12s} | Train Acc: {:.2%} | Test Acc: {:.2%}".format(method, train_acc, test_acc))
-        
+
         # 5. Collect Interaction Effects for choquet_2add (from the model coefficients)
-        model_ch2add = ChoquisticRegression(method="choquet_2add", 
-                                            logistic_params=choq_logistic_params, 
-                                            scale_data=scale_data, 
-                                            random_state=sim_seed)
+        model_ch2add = ChoquisticRegression(
+            method="choquet_2add", 
+            logistic_params={**choq_logistic_params, 'random_state': sim_seed}, 
+            scale_data=scale_data, 
+            random_state=sim_seed
+        )
         model_ch2add.fit(X_train, y_train)
         if hasattr(model_ch2add, "classifier_"):
             coef_ch = model_ch2add.classifier_.coef_[0]
@@ -158,7 +168,7 @@ def run_experiment(
                 interaction_matrix[j, i] = interaction_coef[idx]
                 idx += 1
         all_interaction_matrices.append(interaction_matrix)
-        
+
         # 6. Collect log-odds and probabilities using the model’s public API (raw X_test)
         log_odds_test = model_ch2add.decision_function(X_test)
         probs_test = model_ch2add.predict_proba(X_test)
@@ -168,7 +178,7 @@ def run_experiment(
             'log_odds_test': log_odds_test,
             'predicted_probabilities_test': probs_test
         }
-        
+
         all_sim_results.append(sim_results)
     
     # 7. Produce Aggregate Plots

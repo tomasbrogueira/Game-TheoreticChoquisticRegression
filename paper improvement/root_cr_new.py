@@ -40,6 +40,8 @@ def choquet_matrix(X_orig):
     all_coalitions = []
     for r in range(1, nAttr + 1):
         all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+
     data_opt = np.zeros((nSamp, len(all_coalitions)))
     for i in range(nSamp):
         order = np.argsort(X_orig[i])
@@ -47,9 +49,8 @@ def choquet_matrix(X_orig):
         prev = 0.0
         for j in range(nAttr):
             coalition = tuple(sorted(order[j:]))
-            try:
-                idx = all_coalitions.index(coalition)
-            except ValueError:
+            idx = coalition_to_index.get(coalition)
+            if idx is None:
                 continue
             diff = sorted_vals[j] - prev
             prev = sorted_vals[j]
