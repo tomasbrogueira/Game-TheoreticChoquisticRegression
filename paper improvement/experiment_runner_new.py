@@ -16,7 +16,7 @@ def ensure_folder(folder):
         os.makedirs(folder)
 
 # Import our Choquistic module and the data reader module.
-from root_CR import ChoquisticRegression
+from root_cr_new import ChoquisticRegression
 import mod_GenFuzzyRegression as modGF
 
 def run_experiment(
@@ -25,7 +25,7 @@ def run_experiment(
     random_state=0,
     n_simulations=1,
     solver_lr=('newton-cg', 'sag'),
-    baseline_max_iter=10000,
+    baseline_max_iter=1000,
     baseline_logistic_params=None,
     choq_logistic_params=None,
     methods=["choquet_2add", "choquet", "mlm", "mlm_2add"],
@@ -62,9 +62,9 @@ def run_experiment(
     """
     # Set defaults if parameters are None
     if baseline_logistic_params is None:
-        baseline_logistic_params = {'penalty': None}
+        baseline_logistic_params = {'penalty': None, 'solver': 'newton-cg', 'max_iter': baseline_max_iter, 'random_state': random_state}
     if choq_logistic_params is None:
-        choq_logistic_params = {'penalty': None}
+        choq_logistic_params = {'penalty': None, 'solver': 'newton-cg', 'max_iter': baseline_max_iter, 'random_state': random_state}
     
     ensure_folder(plot_folder)
     
@@ -110,7 +110,6 @@ def run_experiment(
             # For mlm methods, adjust logistic parameters for convergence.
             if method in ["mlm", "mlm_2add"]:
                 method_logistic_params = choq_logistic_params.copy()
-                method_logistic_params.update({'max_iter': 50000, 'solver': 'saga'})
             else:
                 method_logistic_params = choq_logistic_params
             model = ChoquisticRegression(method=method, 

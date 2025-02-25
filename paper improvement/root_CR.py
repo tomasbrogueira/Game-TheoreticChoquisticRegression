@@ -215,7 +215,7 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         self.transformer_ = ChoquetTransformer(method=self.method)
         X_transformed = self.transformer_.fit_transform(X_scaled)
         # Fit logistic regression on transformed features
-        self.classifier_ = LogisticRegression(random_state=self.random_state, max_iter=10000, **self.logistic_params)
+        self.classifier_ = LogisticRegression(random_state=self.random_state, **self.logistic_params)
         self.classifier_.fit(X_transformed, y)
         return self
     

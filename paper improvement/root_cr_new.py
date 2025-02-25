@@ -158,18 +158,19 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
 # =============================================================================
 class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
     """
-    Choquistic Regression classifier (composition version).
-    This estimator optionally scales the input, transforms it via a Choquet (or multilinear)
-    transformation, and then fits a LogisticRegression on the transformed features.
+    Choquistic Regression classifier.
+    
+    This estimator first optionally scales the input data, then applies a Choquet (or multilinear) 
+    transformation, and finally fits a LogisticRegression classifier.
     
     Parameters
     ----------
     method : str, default="choquet_2add"
         Transformation method to use.
     logistic_params : dict, default=None
-        Extra keyword arguments for the underlying LogisticRegression.
+        Additional keyword arguments for the underlying LogisticRegression.
     scale_data : bool, default=True
-        If True, standardize the input features before transformation.
+        If True, standardize the input features (zero mean, unit variance) before transformation.
     random_state : int or None, default=None
         Random state for reproducibility.
     """
@@ -178,20 +179,23 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         self.logistic_params = logistic_params if logistic_params is not None else {}
         self.scale_data = scale_data
         self.random_state = random_state
-        
+    
     def fit(self, X, y):
         X = np.array(X)
+        # Optionally scale data
         if self.scale_data:
             self.scaler_ = StandardScaler()
             X_scaled = self.scaler_.fit_transform(X)
         else:
             X_scaled = X
+        # Transform features
         self.transformer_ = ChoquetTransformer(method=self.method)
         X_transformed = self.transformer_.fit_transform(X_scaled)
+        # Fit logistic regression on transformed features
         self.classifier_ = LogisticRegression(random_state=self.random_state, max_iter=10000, **self.logistic_params)
         self.classifier_.fit(X_transformed, y)
         return self
-
+    
     def predict(self, X):
         X = np.array(X)
         if self.scale_data:
@@ -200,7 +204,7 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
             X_scaled = X
         X_transformed = self.transformer_.transform(X_scaled)
         return self.classifier_.predict(X_transformed)
-
+    
     def predict_proba(self, X):
         X = np.array(X)
         if self.scale_data:
@@ -209,27 +213,42 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
             X_scaled = X
         X_transformed = self.transformer_.transform(X_scaled)
         return self.classifier_.predict_proba(X_transformed)
-
+    
     def score(self, X, y):
+        X = np.array(X)
         if self.scale_data:
             X_scaled = self.scaler_.transform(X)
         else:
             X_scaled = X
         X_transformed = self.transformer_.transform(X_scaled)
         return self.classifier_.score(X_transformed, y)
-
+    
+    def decision_function(self, X):
+        """
+        Compute the decision function (log-odds) for the input samples.
+        """
+        X = np.array(X)
+        if self.scale_data:
+            X_scaled = self.scaler_.transform(X)
+        else:
+            X_scaled = X
+        X_transformed = self.transformer_.transform(X_scaled)
+        return self.classifier_.decision_function(X_transformed)
+    
     def compute_shapley_values(self):
         """
-        Compute Shapley values for the full Choquet method.
-        Only implemented when method == "choquet".
+        Compute the Shapley values (marginal contributions) for each feature based on the learned
+        game parameters. This method is implemented only for the full "choquet" method.
         """
         if self.method != "choquet":
             raise ValueError("Shapley value computation is only implemented for the full 'choquet' method.")
         m = self.transformer_.n_features_in_
         all_coalitions = self.transformer_.all_coalitions_
         v = self.classifier_.coef_[0]
+        from math import factorial
         denom = factorial(m)
         phi = np.zeros(m)
+        import itertools
         for j in range(m):
             for r in range(0, m):
                 for B in itertools.combinations([i for i in range(m) if i != j], r):
@@ -243,33 +262,22 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
                     phi[j] += weight * (vBj - vB)
         return phi
 
+
 # =============================================================================
 # Implementation 2: Inheritance-based ChoquisticRegression
 # =============================================================================
 class ChoquisticRegression_Inheritance(LogisticRegression):
-    """
-    Choquistic Regression classifier (inheritance version).
-    Inherits directly from LogisticRegression. In this implementation, the input is first
-    scaled and transformed before being passed to the parent LogisticRegression methods.
-    
-    Parameters:
-      method : str, default="choquet_2add"
-          Transformation method.
-      scale_data : bool, default=True
-          Whether to standardize input features.
-      logistic_params : dict, default=None
-          Extra parameters for LogisticRegression.
-      random_state : int or None, default=None
-          Random state for reproducibility.
-    """
     def __init__(self, method="choquet_2add", scale_data=True, logistic_params=None, random_state=None):
         self.method = method
         self.scale_data = scale_data
         self.random_state = random_state
         if logistic_params is None:
             logistic_params = {}
+        # Set random_state and default solver if not provided.
         logistic_params.setdefault('random_state', random_state)
+        logistic_params.setdefault('solver', 'newton-cg')
         self.logistic_params = logistic_params
+        # Call the parent constructor with the provided parameters.
         super().__init__(**self.logistic_params)
         self.transformer_ = ChoquetTransformer(method=self.method)
         if self.scale_data:
@@ -279,31 +287,43 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 
     def fit(self, X, y, **fit_params):
         X = np.array(X)
+        # Store the raw feature count separately.
+        self.raw_n_features_in_ = X.shape[1]
         if self.scale_data:
             self.scaler_ = StandardScaler().fit(X)
             X_scaled = self.scaler_.transform(X)
         else:
             X_scaled = X
         X_transformed = self.transformer_.fit_transform(X_scaled)
+        # The parent's fit() uses the transformed features.
         return super().fit(X_transformed, y, **fit_params)
 
-    def predict(self, X):
+    def _transform(self, X):
         X = np.array(X)
-        if self.scale_data:
-            X_scaled = self.scaler_.transform(X)
+        # If X has the raw feature count, apply scaling and transformation.
+        # Otherwise, assume it's already transformed.
+        if X.shape[1] == self.raw_n_features_in_:
+            if self.scale_data:
+                X_scaled = self.scaler_.transform(X)
+            else:
+                X_scaled = X
+            return self.transformer_.transform(X_scaled)
         else:
-            X_scaled = X
-        X_transformed = self.transformer_.transform(X_scaled)
+            return X
+
+    def predict(self, X):
+        X_transformed = self._transform(X)
         return super().predict(X_transformed)
 
     def predict_proba(self, X):
-        X = np.array(X)
-        if self.scale_data:
-            X_scaled = self.scaler_.transform(X)
-        else:
-            X_scaled = X
-        X_transformed = self.transformer_.transform(X_scaled)
+        X_transformed = self._transform(X)
         return super().predict_proba(X_transformed)
+
+    def decision_function(self, X):
+        X_transformed = self._transform(X)
+        return super().decision_function(X_transformed)
+
+
 
     def score(self, X, y):
         X = np.array(X)
@@ -386,6 +406,6 @@ def compute_banzhaf_indices(v, m, all_coalitions):
 # =============================================================================
 # You can switch the default implementation here.
 # For example, to use the inheritance-based version, change the next line accordingly.
-ChoquisticRegression = ChoquisticRegression_Composition
+#ChoquisticRegression = ChoquisticRegression_Composition
 # Alternatively:
-# ChoquisticRegression = ChoquisticRegression_Inheritance
+ChoquisticRegression = ChoquisticRegression_Inheritance
