@@ -402,6 +402,61 @@ def compute_banzhaf_indices(v, m, all_coalitions):
                 phi_b[j] += (vBj - vB)
     return phi_b / norm
 
+def compute_banzhaf_interaction_matrix(v, m, all_coalitions):
+    """
+    Compute the Banzhaf interaction matrix given the learned coefficient vector v,
+    the number of original features m, and the list of all nonempty coalitions.
+    
+    The Banzhaf interaction index for a pair of features (i, j) is computed as:
+      I(i,j) = (1 / 2^(m-2)) * sum_{S ⊆ N\{i,j}} [v(S ∪ {i, j}) - v(S ∪ {i}) - v(S ∪ {j}) + v(S)]
+      
+    Parameters:
+      - v: 1D array of learned coefficients (ordered as in all_coalitions)
+      - m: number of original features
+      - all_coalitions: list of tuples representing all nonempty coalitions 
+        (as produced by the choquet_matrix transformation)
+        
+    Returns:
+      - A symmetric m x m numpy array containing the Banzhaf interaction indices.
+    """
+    import itertools
+    interaction_matrix = np.zeros((m, m))
+    norm = 2 ** (m - 2)  # normalization: number of subsets S of N \ {i, j}
+    # Loop over each unique pair of features (i, j)
+    for i in range(m):
+        for j in range(i+1, m):
+            total = 0.0
+            # Compute over all subsets S of the remaining features
+            others = [k for k in range(m) if k not in (i, j)]
+            for r in range(0, len(others)+1):
+                for S in itertools.combinations(others, r):
+                    S = tuple(sorted(S))
+                    # v(S): if S is empty, assume 0
+                    vS = 0.0 if len(S) == 0 else v[all_coalitions.index(S)]
+                    # v(S ∪ {i})
+                    Si = tuple(sorted(S + (i,)))
+                    try:
+                        vSi = v[all_coalitions.index(Si)]
+                    except ValueError:
+                        vSi = 0.0
+                    # v(S ∪ {j})
+                    Sj = tuple(sorted(S + (j,)))
+                    try:
+                        vSj = v[all_coalitions.index(Sj)]
+                    except ValueError:
+                        vSj = 0.0
+                    # v(S ∪ {i, j})
+                    Sij = tuple(sorted(S + (i, j)))
+                    try:
+                        vSij = v[all_coalitions.index(Sij)]
+                    except ValueError:
+                        vSij = 0.0
+                    total += (vSij - vSi - vSj + vS)
+            interaction_matrix[i, j] = total / norm
+            interaction_matrix[j, i] = total / norm
+    return interaction_matrix
+
+
 # =============================================================================
 # Choose Default Implementation
 # =============================================================================
