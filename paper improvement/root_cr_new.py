@@ -363,26 +363,6 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 # =============================================================================
 # Explicit Interpretability Functions (shared utilities)
 # =============================================================================
-def compute_shapley_values_explicit(v, m, all_coalitions):
-    """
-    Compute Shapley values explicitly given learned coefficients v, number of features m,
-    and the list of all nonempty coalitions.
-    """
-    phi = np.zeros(m)
-    denom = factorial(m)
-    for j in range(m):
-        for r in range(0, m):
-            for B in itertools.combinations([i for i in range(m) if i != j], r):
-                vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
-                Bj = tuple(sorted(B + (j,)))
-                try:
-                    vBj = v[all_coalitions.index(Bj)]
-                except ValueError:
-                    continue
-                weight = factorial(m - r - 1) * factorial(r) / denom
-                phi[j] += weight * (vBj - vB)
-    return phi
-
 def compute_banzhaf_indices(v, m, all_coalitions):
     """
     Compute Banzhaf indices explicitly given learned coefficients v, number of features m,
