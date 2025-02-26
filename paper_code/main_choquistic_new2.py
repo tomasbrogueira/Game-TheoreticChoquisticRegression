@@ -354,9 +354,9 @@ def diff(first, second):
 # X and y are the full dataset; X_hsic and y_hsic are the subsamples to calculate HSIC
 #data_imp = 'raisin'
 #data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','wine','compas','lsac_new','skin','dados_covid_sbpo'])
-data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
+#data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
 #data_imp = list(['covid_gamma','covid_delta','covid_omicron','dados_covid_sbpo'])
-#data_imp = list(['dados_covid_sbpo_atual'])
+data_imp = list(['dados_covid_sbpo_atual'])
 
 attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 
@@ -365,7 +365,7 @@ attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 solver_lr = ('newton-cg', 'sag')
 
 
-nSimul = 50 # 50 simulations
+nSimul = 1 # 50 simulations
 
 accuracy_linear_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
 accuracy_linear_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
@@ -394,14 +394,14 @@ for ll in range(len(data_imp)):
     # Data parameters
     nSamp,nAttr = X.shape
     
-    '''
+    
     # Transformation matrix Shapley to game
     matrix_s2g = tr_shap2game(nAttr, nAttr)
     matrix_s2g = matrix_s2g[1:,:]
     
     matrix_b2g = tr_banz2game(nAttr, nAttr)
     matrix_b2g = matrix_b2g[1:,:]
-    '''
+    
     
     n_2add = nParam_kAdd(2,nAttr)
     n_2add = nAttr+1
@@ -473,7 +473,7 @@ for ll in range(len(data_imp)):
 # exit();
 
 data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
-np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
+#np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
 #accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr = np.load('results_logistic_all.npy', allow_pickle=True)
     
 accuracy_linear_train_mean = np.mean(accuracy_linear_train,axis=2)
@@ -513,7 +513,7 @@ print([accuracy_linear_test_mean, accuracy_choquet_test_mean, accuracy_choquet_k
 print([accuracy_linear_test_std, accuracy_choquet_test_std, accuracy_choquet_kadd_test_std, accuracy_mlm_test_std, accuracy_mlm_kadd_test_mean])
 
 
-exit();
+#exit();
 
 #covid_param = param_choquet_kadd_train[700:]
 covid_param = param_choquet_kadd_train

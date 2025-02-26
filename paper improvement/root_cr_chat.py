@@ -8,9 +8,10 @@ import math
 from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+from scipy.special import bernoulli
 
 # =============================================================================
-# Utility functions for k-additive models (using the alternative equations)
+# Utility functions for k-additive models (exactly as in your reference code)
 # =============================================================================
 def nParam_kAdd(kAdd, nAttr):
     '''Return the number of parameters in a k-additive model'''
@@ -28,10 +29,15 @@ def powerset(iterable, k_add):
     return chain.from_iterable(combinations(s, r) for r in range(k_add+1))
 
 def choquet_matrix_mobius(X_orig, kadd):
-    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    """
+    Compute the Möbius representation of the Choquet integral transformation.
+    Expects X_orig as a pandas DataFrame.
+    """
+    nSamp, nAttr = X_orig.shape  # Number of samples (train) and attributes
     k_add_numb = nParam_kAdd(kadd, nAttr)
-    data_opt = np.zeros((nSamp, k_add_numb - 1))
-    # Note: This version expects X_orig to be a pandas DataFrame.
+    
+    data_opt = np.zeros((nSamp, k_add_numb-1))
+    
     for i, s in enumerate(powerset(range(nAttr), kadd)):
         s = list(s)
         if len(s) > 0:
@@ -39,34 +45,55 @@ def choquet_matrix_mobius(X_orig, kadd):
     return data_opt
 
 def choquet_matrix(X_orig):
+    """
+    Compute the full Choquet integral transformation.
+    
+    This function also computes the canonical ordering of nonempty coalitions 
+    (ordered first by size and then lexicographically) and returns it alongside the transformed data.
+    """
+    # Sort each sample and extend with a zero column on the left
     X_orig_sort = np.sort(X_orig)
     X_orig_sort_ind = np.array(np.argsort(X_orig))
     nSamp, nAttr = X_orig.shape  # Number of samples and attributes
     X_orig_sort_ext = np.concatenate((np.zeros((nSamp, 1)), X_orig_sort), axis=1)
     
-    sequence = np.arange(nAttr)
+    # Compute the canonical ordering of all nonempty coalitions:
+    all_coalitions = []
+    for r in range(1, nAttr+1):
+        all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
     
+    # The transformation will produce one value per nonempty coalition.
+    data_opt = np.zeros((nSamp, len(all_coalitions)))
+    
+    # Use the procedure from your reference code.
+    # (Note: The following reproduces exactly the equations from your provided code.)
+    sequence = np.arange(nAttr)
     combin = (99) * np.ones((2**nAttr - 1, nAttr))
     count = 0
     for ii in range(nAttr):
         combin[count:count+comb(nAttr, ii+1), 0:ii+1] = np.array(list(itertools.combinations(sequence, ii+1)))
         count += comb(nAttr, ii+1)
     
-    data_opt = np.zeros((nSamp, 2**nAttr - 1))
     for ii in range(nAttr):
         for jj in range(nSamp):
             list1 = combin.tolist()
             aux = list1.index(np.concatenate((np.sort(X_orig_sort_ind[jj, ii:]), 99 * np.ones((ii,))), axis=0).tolist())
             data_opt[jj, aux] = X_orig_sort_ext[jj, ii+1] - X_orig_sort_ext[jj, ii]
-    return data_opt
+    
+    return data_opt, all_coalitions
 
 def choquet_matrix_2add(X_orig):
+    """
+    Compute the 2-additive Choquet integral transformation.
+    """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    
     k_add = 2
     k_add_numb = nParam_kAdd(k_add, nAttr)
     
     coalit = np.zeros((k_add_numb, nAttr))
+    
     for i, s in enumerate(powerset(range(nAttr), k_add)):
         s = list(s)
         coalit[i, s] = 1
@@ -82,11 +109,15 @@ def choquet_matrix_2add(X_orig):
     return data_opt[:, 1:]
 
 def mlm_matrix(X_orig):
+    """
+    Compute the full multilinear model transformation.
+    """
     nSamp, nAttr = X_orig.shape  # Number of samples and attributes
     X_orig = np.array(X_orig)
     data_opt = np.zeros((nSamp, 2**nAttr))
-    coalitions = list(powerset(range(nAttr), nAttr))
-    for i, s in enumerate(coalitions):
+    for i, s in enumerate(powerset(range(nAttr), nAttr)):
+        s = list(s)
+        # Compute prod_{i in s} x_i and prod_{j not in s} (1 - x_j)
         for j in range(nSamp):
             prod_in = np.prod(X_orig[j, list(s)]) if len(s) > 0 else 1
             complement = [idx for idx in range(nAttr) if idx not in s]
@@ -95,12 +126,17 @@ def mlm_matrix(X_orig):
     return data_opt[:, 1:]
 
 def mlm_matrix_2add(X_orig):
+    """
+    Compute the 2-additive multilinear model transformation.
+    """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    
     k_add = 2
     k_add_numb = nParam_kAdd(k_add, nAttr)
     
     coalit = np.zeros((k_add_numb, nAttr))
+    
     for i, s in enumerate(powerset(range(nAttr), k_add)):
         s = list(s)
         coalit[i, s] = 1
@@ -117,7 +153,6 @@ def mlm_matrix_2add(X_orig):
 
 def tr_shap2game(nAttr, k_add):
     '''Return the transformation matrix from Shapley interaction indices to game, given a k-additive model'''
-    from scipy.special import bernoulli
     nBern = bernoulli(k_add)  # Bernoulli numbers
     k_add_numb = nParam_kAdd(k_add, nAttr)
     
@@ -130,16 +165,15 @@ def tr_shap2game(nAttr, k_add):
     for i in range(coalit.shape[0]):
         for i2 in range(k_add_numb):
             aux2 = int(sum(coalit[i2, :]))
-            aux3 = int(sum(coalit[i, :] * coalit[i2, :]))
+            aux3 = int(sum(coalit[i, :]*coalit[i2, :]))
             aux4 = 0
-            for i3 in range(int(aux3 + 1)):
+            for i3 in range(int(aux3+1)):
                 aux4 += comb(aux3, i3) * nBern[aux2 - i3]
             matrix_shap2game[i, i2] = aux4
     return matrix_shap2game
 
 def tr_banz2game(nAttr, k_add):
     '''Return the transformation matrix from Banzhaf interaction indices, given a k-additive model, to game'''
-    from scipy.special import bernoulli
     nBern = bernoulli(k_add)  # Bernoulli numbers
     k_add_numb = nParam_kAdd(k_add, nAttr)
     
@@ -181,12 +215,15 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         self.n_features_in_ = X.shape[1]
         if self.method == "choquet":
-            _ = choquet_matrix(X)
+            # Get both the transformed data and the canonical coalition ordering.
+            _, all_coalitions = choquet_matrix(X)
+            self.all_coalitions_ = all_coalitions
         return self
     
     def transform(self, X):
         if self.method == "choquet":
-            return choquet_matrix(X)
+            X_trans, _ = choquet_matrix(X)
+            return X_trans
         elif self.method == "choquet_2add":
             return choquet_matrix_2add(X)
         elif self.method == "mlm":
@@ -267,9 +304,6 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         return self.classifier_.score(X_transformed, y)
     
     def decision_function(self, X):
-        """
-        Compute the decision function (log-odds) for the input samples.
-        """
         X = np.array(X)
         if self.scale_data:
             X_scaled = self.scaler_.transform(X)
@@ -280,14 +314,14 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
     
     def compute_shapley_values(self):
         """
-        Compute the Shapley values (marginal contributions) for each feature based on the learned
-        game parameters. This method is implemented only for the full "choquet" method.
+        Compute the Shapley values for each feature based on the learned game parameters.
+        This is implemented only for the full "choquet" method.
         """
         if self.method != "choquet":
             raise ValueError("Shapley value computation is only implemented for the full 'choquet' method.")
         m = self.transformer_.n_features_in_
-        # Note: Detailed computation of Shapley values would require tracking the ordering of coalitions.
-        # Here we provide a placeholder implementation.
+        # Use the canonical ordering stored during fit.
+        all_coalitions = self.transformer_.all_coalitions_
         v = self.classifier_.coef_[0]
         denom = factorial(m)
         phi = np.zeros(m)
@@ -295,10 +329,11 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         for j in range(m):
             for r in range(0, m):
                 for B in itertools.combinations([i for i in range(m) if i != j], r):
-                    vB = 0.0 if len(B) == 0 else v[0]  # Placeholder
+                    # Look up the coefficient for coalition B (if B is empty, value is 0)
+                    vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
                     Bj = tuple(sorted(B + (j,)))
                     try:
-                        vBj = v[0]  # Placeholder
+                        vBj = v[all_coalitions.index(Bj)]
                     except ValueError:
                         continue
                     weight = (factorial(m - r - 1) * factorial(r)) / denom
@@ -319,7 +354,6 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         logistic_params.setdefault('random_state', random_state)
         logistic_params.setdefault('solver', 'newton-cg')
         self.logistic_params = logistic_params
-        # Call the parent constructor with the provided parameters.
         super().__init__(**self.logistic_params)
         self.transformer_ = ChoquetTransformer(method=self.method)
         if self.scale_data:
@@ -329,7 +363,6 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 
     def fit(self, X, y, **fit_params):
         X = np.array(X)
-        # Store the raw feature count separately.
         self.raw_n_features_in_ = X.shape[1]
         if self.scale_data:
             self.scaler_ = StandardScaler().fit(X)
@@ -337,7 +370,6 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         else:
             X_scaled = X
         X_transformed = self.transformer_.fit_transform(X_scaled)
-        # The parent's fit() uses the transformed features.
         return super().fit(X_transformed, y, **fit_params)
 
     def _transform(self, X):
@@ -376,6 +408,7 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         if self.method != "choquet":
             raise ValueError("Shapley value computation is only implemented for the full 'choquet' method.")
         m = self.transformer_.n_features_in_
+        all_coalitions = self.transformer_.all_coalitions_
         v = self.coef_[0]
         denom = factorial(m)
         phi = np.zeros(m)
@@ -383,10 +416,10 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         for j in range(m):
             for r in range(0, m):
                 for B in itertools.combinations([i for i in range(m) if i != j], r):
-                    vB = 0.0 if len(B) == 0 else v[0]
+                    vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
                     Bj = tuple(sorted(B + (j,)))
                     try:
-                        vBj = v[0]
+                        vBj = v[all_coalitions.index(Bj)]
                     except ValueError:
                         continue
                     weight = (factorial(m - r - 1) * factorial(r)) / denom
