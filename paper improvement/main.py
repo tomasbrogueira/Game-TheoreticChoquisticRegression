@@ -1,5 +1,4 @@
 import os
-import matplotlib.pyplot as plt
 from experiment_runner_new import run_experiment
 
 # Datasets
@@ -16,7 +15,7 @@ for dataset in datasets:
         data_imp=dataset,
         test_size=0.2,
         random_state=0,
-        n_simulations=1,  # You can set a higher number of simulation runs.
+        n_simulations=5,  # You can set a higher number of simulation runs.
         solver_lr='newton-cg',
         baseline_max_iter=1000,
         penalty_lr=None,
@@ -27,25 +26,4 @@ for dataset in datasets:
         log_odds_bins=30
     )
     
-    # Collect baseline Logistic Regression test accuracies from each simulation.
-    simulation_ids = []
-    lr_test_accuracies = []
-    for i, sim in enumerate(results['simulations']):
-        simulation_ids.append(f"Sim {i+1}")
-        lr_test_accuracies.append(sim['LR']['test_acc'])
-    
-    # Plot the test accuracies.
-    plt.figure(figsize=(8, 6))
-    plt.bar(simulation_ids, lr_test_accuracies, color='skyblue', edgecolor='black')
-    plt.xlabel("Simulation", fontsize=14)
-    plt.ylabel("Baseline LR Test Accuracy", fontsize=14)
-    plt.title(f"Baseline LR Test Accuracy for {dataset}", fontsize=16)
-    plt.ylim(0, 1)  # Accuracy is between 0 and 1.
-    plt.tight_layout()
-    
-    # Save the accuracy plot to the dataset-specific folder.
-    acc_plot_path = os.path.join(dataset_folder, "baseline_lr_test_accuracy.png")
-    plt.savefig(acc_plot_path)
-    plt.close()
-    
-    print(f"Finished experiment for {dataset}. Baseline LR test accuracy plot saved at: {acc_plot_path}")
+    print(f"Finished experiment for {dataset}.")
