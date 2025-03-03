@@ -2,14 +2,11 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from math import comb, factorial
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
 import pickle
 
 # IMPORTANT: set these before any other imports!
 os.environ["SCIPY_ARRAY_API"] = "1"
-pd.set_option('future.no_silent_downcasting', True)
 
 def ensure_folder(folder):
     if not os.path.exists(folder):
@@ -61,7 +58,7 @@ def run_experiment(
     Returns:
       - final_results: dictionary with accuracy scores, coefficients, and other relevant data
     """
-    # Change parameters in case of input
+    # Update logistic parameters if provided
     if solver_lr is not None:
         baseline_logistic_params['solver'] = solver_lr
         choq_logistic_params['solver'] = solver_lr
@@ -72,16 +69,16 @@ def run_experiment(
         baseline_logistic_params['penalty'] = penalty_lr
         choq_logistic_params['penalty'] = penalty_lr
 
-    ensure_folder(plot_folder)
+    from os import makedirs
+    from os.path import join
+    if not os.path.exists(plot_folder):
+        makedirs(plot_folder)
     
-    # 1. Load and normalize the data (raw data expected)
+    # 1. Load and normalize the data
     X, y = modGF.func_read_data(data_imp)
-    if isinstance(X, pd.DataFrame):
-        X = (X - X.min())/(X.max()-X.min())
-    else:
-        X = (X - X.min())/(X.max()-X.min())
+    X = (X - X.min()) / (X.max() - X.min())
     
-    # Containers for  results
+    # Containers for results and plots
     all_sim_results = []
     all_shapley = []           # for choquet / choquet_2add (only for full choquet)
     all_interaction_matrices = []  # for choquet_2add
@@ -93,14 +90,15 @@ def run_experiment(
         print(f"\nSimulation {sim+1}/{n_simulations}")
         sim_seed = random_state + sim
         
-       # 2. Split data into train/test sets
+        # 2. Split data into train/test sets
+        from sklearn.model_selection import train_test_split
         X_train, X_test, y_train, y_test = train_test_split(
             X, y, test_size=test_size, stratify=y, random_state=sim_seed
         )
 
         # 3. Baseline Logistic Regression on raw features
         baseline_params = baseline_logistic_params.copy()
-        baseline_params['random_state'] = sim_seed  # Set simulation-specific seed
+        baseline_params['random_state'] = sim_seed
         lr_baseline = LogisticRegression(**baseline_params)
         lr_baseline.fit(X_train, y_train)
         baseline_train_acc = lr_baseline.score(X_train, y_train)
@@ -112,10 +110,9 @@ def run_experiment(
             'coef': lr_baseline.coef_
         }
 
-        # 4. Run Choquistic Models using various transformations
+        # 4. Run Choquistic Models using various methods
         for method in methods:
             print("Processing method:", method)
-
             model = ChoquisticRegression(
                 method=method, 
                 logistic_params=choq_logistic_params,
@@ -125,25 +122,22 @@ def run_experiment(
             model.fit(X_train, y_train)
             train_acc = model.score(X_train, y_train)
             test_acc  = model.score(X_test, y_test)
-            # For composition-based implementations the coefficients are stored in classifier_.coef_;
-            # for inheritance-based they are in model.coef_.
             coef = model.classifier_.coef_ if hasattr(model, "classifier_") else model.coef_
             sim_results[method] = {
                 'train_acc': train_acc,
                 'test_acc': test_acc,
                 'coef': coef
             }
-            # Compute Shapley values only for full choquet methods.
             if method in ["choquet", "choquet_2add"]:
                 try:
                     shapley_vals = model.compute_shapley_values()
                     sim_results[method]['shapley'] = shapley_vals
                     all_shapley.append(shapley_vals)
-                    print("Shapley values for {}: {}".format(method, shapley_vals))
+                    print(f"Shapley values for {method}: {shapley_vals}")
                 except Exception as e:
-                    print("Could not compute shapley values for {}: {}".format(method, e))
-            print("Method: {:12s} | Train Acc: {:.2%} | Test Acc: {:.2%}".format(method, train_acc, test_acc))
-            # Collect Interaction Effects for choquet_2add (from the model coefficients) 
+                    print(f"Could not compute Shapley values for {method}: {e}")
+            print(f"Method: {method:12s} | Train Acc: {train_acc:.2%} | Test Acc: {test_acc:.2%}")
+            
             if method == "choquet_2add":
                 if hasattr(model, "classifier_"):
                     coef_ch = model.classifier_.coef_[0]
@@ -159,21 +153,20 @@ def run_experiment(
                         interaction_matrix[j, i] = interaction_coef[idx]
                         idx += 1
                 all_interaction_matrices.append(interaction_matrix)
-                # Collect log-odds and probabilities using the model’s public API (raw X_test)
+                # Collect log-odds and probabilities
                 log_odds_test = model.decision_function(X_test)
                 probs_test = model.predict_proba(X_test)
                 all_log_odds.append(log_odds_test)
                 all_probs.append(probs_test)
-                # Update the existing dictionary instead of overwriting it:
                 sim_results['choquet_2add'].update({
                     'log_odds_test': log_odds_test,
                     'predicted_probabilities_test': probs_test
                 })
-                all_sim_results.append(sim_results)
-
+        all_sim_results.append(sim_results)
     
-    # 5. Produce Plots
-    # (A) Marginal Contributions (if any Shapley values were computed)
+    # ---------------- Plotting Section ----------------
+    
+    # (A) Average Shapley Values for the Full Choquet Method
     if all_shapley:
         all_shapley_arr = np.vstack(all_shapley)
         mean_shapley = np.mean(all_shapley_arr, axis=0)
@@ -181,55 +174,55 @@ def run_experiment(
             feature_names = X.columns.tolist()
         else:
             nAttr = X.shape[1]
-            feature_names = [f"Feature {i}" for i in range(nAttr)]
+            feature_names = [f"F{i}" for i in range(nAttr)]
         ordered_indices = np.argsort(mean_shapley)[::-1]
         ordered_names = np.array(feature_names)[ordered_indices]
         ordered_values = mean_shapley[ordered_indices]
         plt.figure(figsize=(10, 8))
-        plt.barh(ordered_names, ordered_values, color='skyblue', edgecolor='black')
-        plt.xlabel("Mean Shapley Value (Marginal Contribution)", fontsize=16)
-        plt.title("Marginal Contributions (Shapley Values)", fontsize=18)
+        plt.barh(ordered_names, ordered_values, color='steelblue', edgecolor='black')
+        plt.xlabel("Avg. Shapley Value", fontsize=16)
+        plt.title("Average Shapley Values", fontsize=18)
         plt.gca().invert_yaxis()
         plt.grid(axis='x', linestyle='--', alpha=0.5)
         plt.tight_layout()
-        marginal_plot_path = os.path.join(plot_folder, "marginal_contribution_shapley.png")
+        marginal_plot_path = join(plot_folder, "avg_shapley_values.png")
         plt.savefig(marginal_plot_path)
         plt.close()
-        print("Saved marginal contribution histogram to:", marginal_plot_path)
+        print("Saved Shapley values plot to:", marginal_plot_path)
     else:
-        print("No Shapley values computed across simulations; skipping marginal contributions plot.")
+        print("No Shapley values computed; skipping Shapley plot.")
     
-    # (B) Interaction Effects: average interaction matrix from choquet_2add.
+    # (B) Average Interaction Matrix (Choquet 2-additive)
     if all_interaction_matrices:
         mean_interaction_matrix = np.mean(np.array(all_interaction_matrices), axis=0)
         plt.figure(figsize=(8, 6))
         plt.imshow(mean_interaction_matrix, cmap='viridis', interpolation='nearest')
-        plt.colorbar(orientation="vertical")
+        plt.colorbar(orientation="vertical", label="Interaction Value")
         if isinstance(X, pd.DataFrame):
             feature_names = X.columns.tolist()
         else:
             nAttr = X.shape[1]
-            feature_names = [f"Feature {i}" for i in range(nAttr)]
+            feature_names = [f"F{i}" for i in range(nAttr)]
         plt.xticks(range(nAttr), feature_names, rotation=90, fontsize=12)
         plt.yticks(range(nAttr), feature_names, fontsize=12)
-        plt.title("Interaction Effects (Choquet 2-additive)", fontsize=16)
+        plt.title("Avg. Interaction Matrix (Choquet 2-add)", fontsize=16)
         plt.tight_layout()
-        interaction_plot_path = os.path.join(plot_folder, "interaction_effects.png")
+        interaction_plot_path = join(plot_folder, "avg_interaction_matrix.png")
         plt.savefig(interaction_plot_path)
         plt.close()
         print("Saved interaction effects plot to:", interaction_plot_path)
     
-    # (C) Log-Odds Histogram
+    # (C) Log-Odds Distribution Histogram (Choquet 2-additive)
     if all_log_odds:
         all_log_odds_concat = np.concatenate(all_log_odds)
         plt.figure(figsize=(10, 6))
-        plt.hist(all_log_odds_concat, bins=log_odds_bins, color='lightgreen', edgecolor='black')
+        plt.hist(all_log_odds_concat, bins=log_odds_bins, color='mediumseagreen', edgecolor='black')
         plt.xlabel("Log-Odds", fontsize=16)
         plt.ylabel("Frequency", fontsize=16)
-        plt.title("Log-Odds Histogram (Choquet 2-additive)", fontsize=18)
+        plt.title("Log-Odds Distribution (Choquet 2-add)", fontsize=18)
         plt.grid(axis='y', linestyle='--', alpha=0.5)
         plt.tight_layout()
-        log_odds_plot_path = os.path.join(plot_folder, "log_odds_histogram.png")
+        log_odds_plot_path = join(plot_folder, "log_odds_distribution.png")
         plt.savefig(log_odds_plot_path)
         plt.close()
         print("Saved log-odds histogram to:", log_odds_plot_path)
@@ -239,115 +232,94 @@ def run_experiment(
         all_log_odds_concat = np.concatenate(all_log_odds)
         all_probs_concat = np.concatenate(all_probs, axis=0)
         plt.figure(figsize=(10, 6))
-        plt.scatter(all_log_odds_concat, all_probs_concat[:, 1], alpha=0.7, color='coral', edgecolor='k')
+        plt.scatter(all_log_odds_concat, all_probs_concat[:, 1], alpha=0.7, color='darkorange', edgecolor='k')
         plt.xlabel("Log-Odds", fontsize=16)
-        plt.ylabel("Predicted Probability (Positive Class)", fontsize=16)
+        plt.ylabel("Predicted Probability (Positive)", fontsize=16)
         plt.title("Log-Odds vs. Predicted Probability", fontsize=18)
         plt.grid(axis='both', linestyle='--', alpha=0.5)
         plt.tight_layout()
-        log_odds_prob_plot_path = os.path.join(plot_folder, "log_odds_vs_prob.png")
+        log_odds_prob_plot_path = join(plot_folder, "log_odds_vs_probability.png")
         plt.savefig(log_odds_prob_plot_path)
         plt.close()
-        print("Saved log-odds vs predicted probability plot to:", log_odds_prob_plot_path)
+        print("Saved log-odds vs. probability plot to:", log_odds_prob_plot_path)
     
-    # (E) --- New: Compute and Plot Explicit Shapley Values and Banzhaf Indices for "choquet" ---
-    # Only proceed if the full "choquet" method was run in at least one simulation.
+    # (E) Shapley vs. Banzhaf Comparison (Choquet)
     shapleys = []
     banzhaf_indices = []
-    # Reconstruct feature names and number of original features.
     if isinstance(X, pd.DataFrame):
         feature_names = X.columns.tolist()
     else:
-        feature_names = [f"Feature {i}" for i in range(X.shape[1])]
+        m = X.shape[1]
+        feature_names = [f"F{i}" for i in range(m)]
     m = X.shape[1]
-    # To compute the explicit values we need the list of all coalitions as produced in the choquet transformation.
-    # If scaling was applied, mimic the same transformation.
-    if scale_data:
-        from sklearn.preprocessing import StandardScaler
-        X_co = StandardScaler().fit_transform(X)
-    else:
-        X_co = X
-    from root_cr_new import choquet_matrix, compute_banzhaf_indices, compute_banzhaf_interaction_matrix
-    _, all_coalitions = choquet_matrix(X_co)
+    if all_sim_results:
+        from root_cr_new import choquet_matrix, compute_banzhaf_indices, compute_banzhaf_interaction_matrix
+        _, all_coalitions = choquet_matrix(X)
+        for sim in all_sim_results:
+            if "choquet" in sim and "shapley" in sim["choquet"]:
+                v = sim["choquet"]["coef"][0]
+                banzhaf = compute_banzhaf_indices(v, m, all_coalitions)
+                banzhaf_indices.append(banzhaf)
+                shapleys.append(sim["choquet"]["shapley"])
+        if shapleys:
+            mean_shapley = np.mean(shapleys, axis=0)
+            mean_banzhaf = np.mean(banzhaf_indices, axis=0)
+            plt.figure(figsize=(12, 6))
+            indices = np.arange(m)
+            width = 0.4
+            plt.bar(indices - width/2, mean_shapley, width, color='dodgerblue', label="Shapley")
+            plt.bar(indices + width/2, mean_banzhaf, width, color='crimson', label="Banzhaf")
+            plt.xticks(indices, feature_names, rotation=45, fontsize=12)
+            plt.xlabel("Features", fontsize=14)
+            plt.ylabel("Value", fontsize=14)
+            plt.title("Shapley vs. Banzhaf Comparison", fontsize=16)
+            plt.grid(axis='y', linestyle='--', alpha=0.5)
+            plt.legend()
+            plt.tight_layout()
+            comparison_plot_path = join(plot_folder, "shapley_vs_banzhaf.png")
+            plt.savefig(comparison_plot_path)
+            plt.close()
+            print("Saved Shapley vs. Banzhaf plot to:", comparison_plot_path)
+        else:
+            print("No Shapley values computed for choquet method; skipping comparison plot.")
     
-    for sim in all_sim_results:
-        if "choquet" in sim and "shapley" in sim["choquet"]:
-            # Retrieve the learned coefficients from the full choquet model.
-            v = sim["choquet"]["coef"][0]
-            # Compute explicit Shapley values and Banzhaf indices.
-            banzhaf = compute_banzhaf_indices(v, m, all_coalitions)
-            banzhaf_indices.append(banzhaf)
-            shapleys.append(sim["choquet"]["shapley"])
-    
-    if shapleys:
-        mean_shapley = np.mean(shapleys, axis=0)
-        mean_banzhaf = np.mean(banzhaf_indices, axis=0)
-    
-        # Plot a grouped bar chart for comparison.
-        plt.figure(figsize=(12, 6))
-        indices = np.arange(m)
-        width = 0.4  # Increase the width of the bars to reduce space between them
-        plt.bar(indices - width/2, mean_shapley, width, label="Shapley")
-        plt.bar(indices + width/2, mean_banzhaf, width, label="Banzhaf Indices")
-        plt.xticks(indices, feature_names, rotation=45, fontsize=12)
-        plt.xlabel("Features", fontsize=14)
-        plt.ylabel("Value", fontsize=14)
-        plt.title("Comparison of Shapley Values and Banzhaf Indices (Choquet Method)", fontsize=16)
-        plt.grid(axis='y', linestyle='--', alpha=0.5)
-        plt.legend()
-        plt.tight_layout()
-        comparison_plot_path = os.path.join(plot_folder, "shapley_banzhaf_comparison.png")
-        plt.savefig(comparison_plot_path)
-        plt.close()
-        print("Saved Shapley and Banzhaf comparison plot to:", comparison_plot_path)
-    else:
-        print("No choquet method simulations with Shapley values computed; skipping explicit Shapley and Banzhaf plot.")
-    
-    # (F) --- New: Compute and Plot Banzhaf Interaction Matrix for "choquet" ---
+    # (F) Average Banzhaf Interaction Matrix (Choquet)
     banzhaf_interaction_matrices = []
-    # 'm' and 'feature_names' are as determined earlier (number of features and their names)
     for sim in all_sim_results:
         if "choquet" in sim:
             v = sim["choquet"]["coef"][0]
-            # Use the same all_coalitions as computed before from the choquet_matrix transformation.
             from root_cr_new import choquet_matrix
-            # If scaling was applied, mimic the same transformation to get the coalitions.
             if scale_data:
                 from sklearn.preprocessing import StandardScaler
                 X_co = StandardScaler().fit_transform(X)
             else:
                 X_co = X
             _, all_coalitions = choquet_matrix(X_co)
-            
             bi_matrix = compute_banzhaf_interaction_matrix(v, m, all_coalitions)
             banzhaf_interaction_matrices.append(bi_matrix)
-
     if banzhaf_interaction_matrices:
         mean_banzhaf_interaction = np.mean(np.array(banzhaf_interaction_matrices), axis=0)
         plt.figure(figsize=(8, 6))
         plt.imshow(mean_banzhaf_interaction, cmap='viridis', interpolation='nearest')
-        plt.colorbar(orientation="vertical", label="Banzhaf Interaction Value")
+        plt.colorbar(orientation="vertical", label="Banzhaf Value")
         plt.xticks(range(m), feature_names, rotation=90, fontsize=12)
         plt.yticks(range(m), feature_names, fontsize=12)
-        plt.title("Banzhaf Interaction Effects (Choquet Method)", fontsize=16)
+        plt.title("Avg. Banzhaf Interaction Matrix", fontsize=16)
         plt.tight_layout()
-        banzhaf_interaction_plot_path = os.path.join(plot_folder, "banzhaf_interaction_effects.png")
+        banzhaf_interaction_plot_path = join(plot_folder, "avg_banzhaf_interaction.png")
         plt.savefig(banzhaf_interaction_plot_path)
         plt.close()
-        print("Saved Banzhaf interaction effects plot to:", banzhaf_interaction_plot_path)
+        print("Saved Banzhaf interaction plot to:", banzhaf_interaction_plot_path)
     else:
-        print("No choquet method simulations available for Banzhaf interactions; skipping Banzhaf interaction plot.")
-
-    # (G) --- Modified: Aggregate and Plot Average Test Accuracies for All Models ---
-    # Collect model names from each simulation (excluding non-model keys)
+        print("No Banzhaf interaction data; skipping Banzhaf plot.")
+    
+    # (G) Average Test Accuracy by Model
     model_names = set()
     for sim in all_sim_results:
         for key in sim.keys():
             if key not in ["choquet_2add_extra"]:
                 model_names.add(key)
     model_names = sorted(list(model_names))
-
-    # Create a dictionary to store test accuracies per model
     acc_data = {model: [] for model in model_names}
     for sim in all_sim_results:
         for model in model_names:
@@ -355,49 +327,36 @@ def run_experiment(
                 acc_data[model].append(sim[model]['test_acc'])
             else:
                 acc_data[model].append(None)
-
-    # Compute the average test accuracy for each model (ignoring None values)
-    avg_acc = {
-        model: np.mean([acc for acc in acc_data[model] if acc is not None])
-        for model in model_names
-    }
-
-    # Get the default color cycle (the same colors as before)
-    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
-
-    # Plot a bar chart with one bar per model (average accuracy)
+    avg_acc = { model: np.mean([acc for acc in acc_data[model] if acc is not None])
+                for model in model_names }
+    
+    # Use a consistent color cycle from 'tab10'
+    colors = plt.get_cmap('tab10').colors
     plt.figure(figsize=(10, 6))
     x = np.arange(len(model_names))
-    width = 0.8  # full width for each bar
-
-    # Plot each bar with its original color and label
+    width = 0.8
     for i, model in enumerate(model_names):
         plt.bar(x[i], avg_acc[model], width=width, color=colors[i % len(colors)],
                 edgecolor='black', label=model)
-
-    # The styling remains the same except that x-axis now shows model names.
-    plt.xlabel("Simulation", fontsize=14)
+    plt.xlabel("Model", fontsize=14)
     plt.ylabel("Test Accuracy", fontsize=14)
-    plt.title("Comparison of Test Accuracies for All Models", fontsize=16)
+    plt.title("Average Test Accuracy by Model", fontsize=16)
     plt.xticks(x, model_names, fontsize=12)
-    plt.legend(fontsize=12)
-    plt.ylim(0, 1)  # since accuracy ranges between 0 and 1
+    plt.ylim(0, 1)
     plt.grid(axis='y', linestyle='--', alpha=0.5)
     plt.tight_layout()
-
-    acc_plot_table_path = os.path.join(plot_folder, "all_models_test_accuracies.png")
-    plt.savefig(acc_plot_table_path)
+    acc_plot_path = join(plot_folder, "avg_test_accuracy.png")
+    plt.savefig(acc_plot_path)
     plt.close()
-    print("Saved test accuracies plot to:", acc_plot_table_path)
-
-
-    # (H) Optional: Decision Boundary Plot for 2D data (if applicable)
+    print("Saved test accuracy plot to:", acc_plot_path)
+    
+    # (H) Optional: Decision Boundary Plot for 2D data
     def plot_decision_boundary(X, y, model, filename):
         from matplotlib.colors import ListedColormap
         X = np.array(X)
         y = np.array(y)
-        cmap_light = ListedColormap(['#FFAAAA', '#AAFFAA'])
-        cmap_bold = ListedColormap(['#FF0000', '#00FF00'])
+        cmap_light = ListedColormap(['#FFCCCC', '#CCFFCC'])
+        cmap_bold = ListedColormap(['#FF0000', '#00AA00'])
         if X.shape[1] != 2:
             print("Decision boundary plot only works for 2D data.")
             return
@@ -418,11 +377,84 @@ def run_experiment(
         print("Saved decision boundary plot to:", filename)
     
     if np.array(X).shape[1] == 2:
-        plot_decision_boundary(X_train, y_train, lr_baseline, os.path.join(plot_folder, "aggregate_decision_boundary_lr.png"))
-        model_ch2add_last = ChoquisticRegression(method="choquet_2add", logistic_params=choq_logistic_params, scale_data=scale_data, random_state=random_state)
+        plot_decision_boundary(X_train, y_train, lr_baseline, join(plot_folder, "decision_boundary_lr.png"))
+        model_ch2add_last = ChoquisticRegression(method="choquet_2add", 
+                                                 logistic_params=choq_logistic_params, 
+                                                 scale_data=scale_data, 
+                                                 random_state=random_state)
         model_ch2add_last.fit(X_train, y_train)
-        plot_decision_boundary(X_train, y_train, model_ch2add_last, os.path.join(plot_folder, "aggregate_decision_boundary_choquistic.png"))
+        plot_decision_boundary(X_train, y_train, model_ch2add_last, join(plot_folder, "decision_boundary_choquistic.png"))
     
+    # (I) Main Effects from Regression Coefficients (Choquet 2-add)
+    choq2add_coefs = []
+    for sim in all_sim_results:
+        if "choquet_2add" in sim:
+            coef = sim["choquet_2add"]["coef"][0]  # [main effects | interactions]
+            choq2add_coefs.append(coef)
+    choq2add_coefs = np.array(choq2add_coefs)
+    nAttr = X.shape[1]
+    main_effects = choq2add_coefs[:, :nAttr]
+    mean_main = np.mean(main_effects, axis=0)
+    std_main = np.std(main_effects, axis=0)
+    if isinstance(X, pd.DataFrame):
+        feature_names = X.columns.tolist()
+    else:
+        feature_names = [f"F{i}" for i in range(nAttr)]
+    ordered_idx = np.argsort(mean_main)[::-1]
+    ordered_names = np.array(feature_names)[ordered_idx]
+    ordered_mean = mean_main[ordered_idx]
+    ordered_std = std_main[ordered_idx]
+
+    plt.figure(figsize=(10,8))
+    plt.barh(ordered_names, ordered_mean, xerr=ordered_std, color='dodgerblue', edgecolor='black')
+    plt.xlabel("Coefficient Value", fontsize=14)
+    plt.title("Main Effects: Regression Coefficients (Choquet 2-add)", fontsize=16)
+    plt.gca().invert_yaxis()
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    reg_coef_plot_path = join(plot_folder, "main_effects_reg_coef.png")
+    plt.savefig(reg_coef_plot_path)
+    plt.close()
+    print("Saved regression coefficients plot to:", reg_coef_plot_path)
+    
+    # (J) Main Effects from Shapley Values (Choquet 2-add)
+    choq2add_shapley = []
+    for sim in all_sim_results:
+        if "choquet_2add" in sim:
+            coef = sim["choquet_2add"]["coef"][0]
+            main_eff = coef[:nAttr]
+            # Reconstruct interaction effects into a symmetric matrix
+            interactions = coef[nAttr:]
+            interaction_matrix = np.zeros((nAttr, nAttr))
+            counter = 0
+            for i in range(nAttr):
+                for j in range(i+1, nAttr):
+                    interaction_matrix[i, j] = interactions[counter]
+                    interaction_matrix[j, i] = interactions[counter]
+                    counter += 1
+            shapley_vals = main_eff + 0.5 * np.sum(interaction_matrix, axis=1)
+            choq2add_shapley.append(shapley_vals)
+    choq2add_shapley = np.array(choq2add_shapley)
+    mean_shapley_2add = np.mean(choq2add_shapley, axis=0)
+    std_shapley_2add = np.std(choq2add_shapley, axis=0)
+    ordered_idx_shap = np.argsort(mean_shapley_2add)[::-1]
+    ordered_names_shap = np.array(feature_names)[ordered_idx_shap]
+    ordered_mean_shap = mean_shapley_2add[ordered_idx_shap]
+    ordered_std_shap = std_shapley_2add[ordered_idx_shap]
+
+    plt.figure(figsize=(10,8))
+    plt.barh(ordered_names_shap, ordered_mean_shap, xerr=ordered_std_shap, color='seagreen', edgecolor='black')
+    plt.xlabel("Shapley Value", fontsize=14)
+    plt.title("Main Effects: Shapley Values (Choquet 2-add)", fontsize=16)
+    plt.gca().invert_yaxis()
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    shapley_plot_path = join(plot_folder, "main_effects_shapley.png")
+    plt.savefig(shapley_plot_path)
+    plt.close()
+    print("Saved Shapley values plot to:", shapley_plot_path)
+    
+    # Save overall results
     final_results = {'simulations': all_sim_results}
     with open(results_filename, "wb") as f:
         pickle.dump(final_results, f)

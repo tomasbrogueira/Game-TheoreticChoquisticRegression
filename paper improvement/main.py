@@ -2,8 +2,8 @@ import os
 from experiment_runner_new import run_experiment
 
 # Datasets
-datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin']
-#datasets = ['transfusion']
+#datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin']
+datasets = ['transfusion']
 #datasets = ['dados_covid_sbpo_atual']
 
 for dataset in datasets:
@@ -16,7 +16,7 @@ for dataset in datasets:
         data_imp=dataset,
         test_size=0.2,
         random_state=0,
-        n_simulations=50,  # You can set a higher number of simulation runs.
+        n_simulations=2,  # You can set a higher number of simulation runs.
         solver_lr='newton-cg',
         baseline_max_iter=10000,
         penalty_lr=None,
