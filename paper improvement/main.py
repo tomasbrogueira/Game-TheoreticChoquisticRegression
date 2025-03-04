@@ -1,10 +1,11 @@
 import os
 from simulation_loop import simulation
+from results_processing import results_processing
 
 # Datasets
 # datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin']
 datasets = ["transfusion"]
-# datasets = ['dados_covid_sbpo_atual']
+#datasets = ['dados_covid_sbpo_atual']
 
 for dataset in datasets:
     # Create a dataset-specific folder inside the "plots" folder.
@@ -20,7 +21,7 @@ for dataset in datasets:
         solver_lr="newton-cg",
         baseline_max_iter=10000,
         penalty_lr=None,
-        methods=["choquet_2add", "choquet", "mlm_2add", "mlm"],
+        methods=["choquet_2add","choquet","mlm","mlm_2add"],
         scale_data=False,
         plot_folder=dataset_folder,  # Pass the dataset-specific folder.
         results_filename=os.path.join(dataset_folder, "results.pkl"),
