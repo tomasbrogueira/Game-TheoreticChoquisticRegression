@@ -354,18 +354,18 @@ def diff(first, second):
 # X and y are the full dataset; X_hsic and y_hsic are the subsamples to calculate HSIC
 #data_imp = 'raisin'
 #data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','wine','compas','lsac_new','skin','dados_covid_sbpo'])
-#data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
+data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
 #data_imp = list(['covid_gamma','covid_delta','covid_omicron','dados_covid_sbpo'])
-data_imp = list(['dados_covid_sbpo_atual'])
+#data_imp = list(['dados_covid_sbpo_atual'])
 
 attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 
 
 #solver_lr = ('lbfgs', 'newton-cg', 'sag','saga')
-solver_lr = ('newton-cg',)
+solver_lr = ('newton-cg','sag')
 
 
-nSimul = 1 # 50 simulations
+nSimul = 50 # 50 simulations
 
 accuracy_linear_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
 accuracy_linear_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
@@ -408,9 +408,9 @@ for ll in range(len(data_imp)):
     n_2add = nAttr+1
     
     # Normalization 0-1
-    from sklearn.preprocessing import StandardScaler
-    X = StandardScaler().fit_transform(X)
-    #X = (X - X.min()) / (X.max() - X.min())
+    #from sklearn.preprocessing import StandardScaler
+    #X = StandardScaler().fit_transform(X)
+    X = (X - X.min()) / (X.max() - X.min())
     
     # Choquet integral matrix
     X_choquet = choquet_matrix(X)
@@ -424,7 +424,7 @@ for ll in range(len(data_imp)):
     for kk in range(nSimul):
         
         indices = np.arange(np.size(X,0))
-        X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(X, y, indices, test_size=0.2, stratify=y, random_state=0)
+        X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(X, y, indices, test_size=0.2, stratify=y)
         
         X_choquet_train = X_choquet[indices_train,:]
         X_choquet_kadd_train = X_choquet_2add[indices_train,:]
@@ -479,8 +479,8 @@ for ll in range(len(data_imp)):
             
 # exit();
 
-#data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
-#np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
+data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
+np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
 #accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr = np.load('results_logistic_all.npy', allow_pickle=True)
     
 accuracy_linear_train_mean = np.mean(accuracy_linear_train,axis=2)
