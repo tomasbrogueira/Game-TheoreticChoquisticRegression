@@ -94,6 +94,7 @@ def simulation(
     all_log_odds = []        # concatenated log-odds for test set
     all_probs = []           # concatenated predicted probabilities for test set
 
+
     for sim in range(n_simulations):
         sim_results = {}
         print(f"\nSimulation {sim+1}/{n_simulations}")
@@ -119,7 +120,7 @@ def simulation(
         lr_baseline.fit(X_train, y_train)
         baseline_train_acc = lr_baseline.score(X_train, y_train)
         baseline_test_acc = lr_baseline.score(X_test, y_test)
-        print("Baseline LR Train Acc: {:.2%}, Test Acc: {:.2%}".format(baseline_train_acc, baseline_test_acc))
+        print("Baseline LR Train Acc: {:.2%}, Test Acc: {:.2%}".format(baseline_train_acc, baseline_test_acc)+", n_iter: "+str(lr_baseline.n_iter_))
         sim_results["LR"] = {"train_acc": baseline_train_acc, "test_acc": baseline_test_acc, "coef": lr_baseline.coef_}
 
         # 4. Run Choquistic Models using various methods
@@ -135,7 +136,7 @@ def simulation(
             train_acc = model.score(X_train, y_train)
             test_acc = model.score(X_test, y_test)
             coef = model.classifier_.coef_ if hasattr(model, "classifier_") else model.coef_
-            sim_results[method] = {"train_acc": train_acc, "test_acc": test_acc, "coef": coef}
+            sim_results[method] = {"train_acc": train_acc, "test_acc": test_acc, "coef": coef, "n_iter": model.classifier_.n_iter_ if hasattr(model, "classifier_") else model.n_iter_}
             
             if method == "choquet":
                 try:
@@ -157,7 +158,7 @@ def simulation(
                     print(f"Choquet 2-add Marginal contributions: {shapley_dict['marginal']}")
                 except Exception as e:
                     print(f"Could not compute values for choquet 2-add: {e}")
-            print(f"Method: {method:12s} | Train Acc: {train_acc:.2%} | Test Acc: {test_acc:.2%}")
+            print(f"Method: {method:12s} | Train Acc: {train_acc:.2%} | Test Acc: {test_acc:.2%} | n_iter: {sim_results[method]['n_iter']}")
 
             if method == "choquet_2add":
                 if hasattr(model, "classifier_"):
@@ -553,10 +554,13 @@ def simulation(
     plt.close()
     print("Saved regression coefficients plot to:", reg_coef_plot_path)
 
+    
     # Save overall results
     final_results = {"simulations": all_sim_results}
+    """
     with open(results_filename, "wb") as f:
         pickle.dump(final_results, f)
     print("Saved overall results to", results_filename)
+    """
 
     return final_results

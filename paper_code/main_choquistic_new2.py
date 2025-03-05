@@ -362,7 +362,7 @@ attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 
 
 #solver_lr = ('lbfgs', 'newton-cg', 'sag','saga')
-solver_lr = ('newton-cg', 'sag')
+solver_lr = ('newton-cg',)
 
 
 nSimul = 1 # 50 simulations
@@ -387,6 +387,7 @@ param_choquet_train = []
 param_choquet_kadd_train = []
 param_mlm_train = []
 param_mlm_kadd_train = []
+n_iterations = {'LR': [], 'CR': [], 'CR2add': [], 'MLMR': [], 'MLMR2add': []}
 
 for ll in range(len(data_imp)):
     X, y = mod_GenFuzzyRegression.func_read_data(data_imp[ll])
@@ -442,37 +443,41 @@ for ll in range(len(data_imp)):
             accuracy_linear_train[ll,ii,kk] = log_reg.score(X_train,y_train)
             accuracy_linear_test[ll,ii,kk] = log_reg.score(X_test,y_test)
             param_linear_train.append(log_reg.coef_)
+            n_iterations['LR'].append(log_reg.n_iter_)
             
             log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_choquet_kadd_train,y_train)
             accuracy_choquet_kadd_train[ll,ii,kk] = log_reg.score(X_choquet_kadd_train,y_train)
             accuracy_choquet_kadd_test[ll,ii,kk] = log_reg.score(X_choquet_kadd_test,y_test)
             param_choquet_kadd_train.append(log_reg.coef_)
+            n_iterations['CR2add'].append(log_reg.n_iter_)
             
             log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_choquet_train,y_train)
             accuracy_choquet_train[ll,ii,kk] = log_reg.score(X_choquet_train,y_train)
             accuracy_choquet_test[ll,ii,kk] = log_reg.score(X_choquet_test,y_test)
             param_choquet_train.append(log_reg.coef_)
+            n_iterations['CR'].append(log_reg.n_iter_)
             
             log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_mlm_kadd_train,y_train)
             accuracy_mlm_kadd_train[ll,ii,kk] = log_reg.score(X_mlm_kadd_train,y_train)
             accuracy_mlm_kadd_test[ll,ii,kk] = log_reg.score(X_mlm_kadd_test,y_test)
             param_mlm_kadd_train.append(log_reg.coef_)
+            n_iterations['MLMR2add'].append(log_reg.n_iter_)
             
             log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
             log_reg.fit(X_mlm_train,y_train)
             accuracy_mlm_train[ll,ii,kk] = log_reg.score(X_mlm_train,y_train)
             accuracy_mlm_test[ll,ii,kk] = log_reg.score(X_mlm_test,y_test)
             param_mlm_train.append(log_reg.coef_)
-            
+            n_iterations['MLMR'].append(log_reg.n_iter_)
                       
             print(ll+1,'/',len(data_imp),'-',kk,'/',nSimul,'-',ii+1,'/',len(solver_lr))
             
 # exit();
 
-data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
+#data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
 #np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
 #accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr = np.load('results_logistic_all.npy', allow_pickle=True)
     
@@ -504,7 +509,12 @@ accuracy_mlm_kadd_train_std = np.std(accuracy_mlm_kadd_train,axis=2)
 accuracy_mlm_kadd_test_std = np.std(accuracy_mlm_kadd_test,axis=2)
 
 accuracy_mlm_train_std = np.std(accuracy_mlm_train,axis=2)
-accuracy_mlm_test_std = np.std(accuracy_mlm_test,axis=2)  
+accuracy_mlm_test_std = np.std(accuracy_mlm_test,axis=2)
+
+iterations_mean = {key: np.mean(val) for key, val in n_iterations.items()}
+iterations_std = {key: np.std(val) for key, val in n_iterations.items()}
+print(iterations_mean)
+print(iterations_std)
 
 print([accuracy_linear_train_mean, accuracy_choquet_train_mean, accuracy_choquet_kadd_train_mean, accuracy_mlm_train_mean, accuracy_mlm_kadd_train_mean])
 print([accuracy_linear_train_std, accuracy_choquet_train_std, accuracy_choquet_kadd_train_std, accuracy_mlm_train_std, accuracy_mlm_kadd_train_std])
