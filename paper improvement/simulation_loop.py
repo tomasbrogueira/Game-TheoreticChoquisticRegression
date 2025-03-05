@@ -72,12 +72,14 @@ def simulation(
     if solver_lr is not None:
         baseline_logistic_params["solver"] = solver_lr
         choq_logistic_params["solver"] = solver_lr
-    if baseline_max_iter is not None:
-        baseline_logistic_params["max_iter"] = baseline_max_iter
-        choq_logistic_params["max_iter"] = baseline_max_iter
     if penalty_lr is not None:
         baseline_logistic_params["penalty"] = penalty_lr
         choq_logistic_params["penalty"] = penalty_lr
+    if baseline_max_iter is not None:
+        baseline_logistic_params["max_iter"] = baseline_max_iter
+        choq_logistic_params["max_iter"] = baseline_max_iter
+
+
 
     if not os.path.exists(plot_folder):
         os.makedirs(plot_folder)
@@ -110,16 +112,19 @@ def simulation(
         if scale_data:
             from sklearn.preprocessing import StandardScaler
             scaler = StandardScaler()
-            X_train = scaler.fit_transform(X_train)
-            X_test = scaler.transform(X_test)
+            X_train_base = scaler.fit_transform(X_train)
+            X_test_base = scaler.transform(X_test)
+        else:
+            X_train_base = X_train
+            X_test_base = X_test
 
         # 3. Baseline Logistic Regression on raw features
         baseline_params = baseline_logistic_params.copy()
         baseline_params["random_state"] = sim_seed
         lr_baseline = LogisticRegression(**baseline_params)
-        lr_baseline.fit(X_train, y_train)
-        baseline_train_acc = lr_baseline.score(X_train, y_train)
-        baseline_test_acc = lr_baseline.score(X_test, y_test)
+        lr_baseline.fit(X_train_base, y_train)
+        baseline_train_acc = lr_baseline.score(X_train_base, y_train)
+        baseline_test_acc = lr_baseline.score(X_test_base, y_test)
         print("Baseline LR Train Acc: {:.2%}, Test Acc: {:.2%}".format(baseline_train_acc, baseline_test_acc)+", n_iter: "+str(lr_baseline.n_iter_))
         sim_results["LR"] = {"train_acc": baseline_train_acc, "test_acc": baseline_test_acc, "coef": lr_baseline.coef_}
 
@@ -129,8 +134,7 @@ def simulation(
             model = ChoquisticRegression(
                 method=method,
                 logistic_params=choq_logistic_params,
-                scale_data=scale_data,
-                random_state=sim_seed,
+                scale_data=scale_data
             )
             model.fit(X_train, y_train)
             train_acc = model.score(X_train, y_train)

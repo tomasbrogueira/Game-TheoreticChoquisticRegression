@@ -408,7 +408,9 @@ for ll in range(len(data_imp)):
     n_2add = nAttr+1
     
     # Normalization 0-1
-    X = (X - X.min()) / (X.max() - X.min())
+    from sklearn.preprocessing import StandardScaler
+    X = StandardScaler().fit_transform(X)
+    #X = (X - X.min()) / (X.max() - X.min())
     
     # Choquet integral matrix
     X_choquet = choquet_matrix(X)
@@ -422,7 +424,7 @@ for ll in range(len(data_imp)):
     for kk in range(nSimul):
         
         indices = np.arange(np.size(X,0))
-        X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(X, y, indices, test_size=0.2, stratify=y)
+        X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(X, y, indices, test_size=0.2, stratify=y, random_state=0)
         
         X_choquet_train = X_choquet[indices_train,:]
         X_choquet_kadd_train = X_choquet_2add[indices_train,:]
@@ -614,8 +616,8 @@ print("Saved interaction effects plot to:", interaction_plot_path)
 
 
 # Interpreting odds change
-aa=pd.DataFrame([1,1,0,0,1,0,0,0,0]).T
-bb=choquet_matrix_2add(aa)
-log_reg.predict_proba(bb)
+#aa=pd.DataFrame([1,1,0,0,1,0,0,0,0]).T
+#bb=choquet_matrix_2add(aa)
+#log_reg.predict_proba(bb)
 
 

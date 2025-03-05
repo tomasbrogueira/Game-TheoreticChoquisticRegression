@@ -184,16 +184,21 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         Random state for reproducibility.
     """
 
-    def __init__(self, method="choquet_2add", logistic_params=None, scale_data=True, random_state=None):
+    def __init__(self, method="choquet_2add", logistic_params={
+        "penalty": None,
+        "max_iter": 1000,
+        "random_state": 0,
+        "solver": "newton-cg",
+    }, scale_data=True):
         self.method = method
-        self.logistic_params = logistic_params if logistic_params is not None else {}
         self.scale_data = scale_data
-        self.random_state = random_state
+        self.random_state = logistic_params.get("random_state", 0)
+        self.logistic_params = logistic_params
+        self.scaler_ = StandardScaler()
 
     def fit(self, X, y):
         X = np.array(X)
         if self.scale_data:
-            self.scaler_ = StandardScaler()
             X_scaled = self.scaler_.fit_transform(X)
         else:
             X_scaled = X
@@ -312,10 +317,15 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         Random state.
     """
 
-    def __init__(self, method="choquet_2add", scale_data=True, logistic_params=None, random_state=None):
+    def __init__(self, method="choquet_2add", scale_data=True, logistic_params={
+        "penalty": None,
+        "max_iter": 1000,
+        "random_state": 0,
+        "solver": "newton-cg",
+    }):
         self.method = method
         self.scale_data = scale_data
-        self.random_state = random_state
+        self.random_state = logistic_params.get("random_state", 0)
         if logistic_params is None:
             logistic_params = {}
         # Set default parameters if not provided.
@@ -497,5 +507,5 @@ def compute_banzhaf_interaction_matrix(v, m, all_coalitions):
 # Choose Default Implementation
 # =============================================================================
 
-#ChoquisticRegression = ChoquisticRegression_Composition
-ChoquisticRegression = ChoquisticRegression_Inheritance
+ChoquisticRegression = ChoquisticRegression_Composition
+#ChoquisticRegression = ChoquisticRegression_Inheritance
