@@ -4,8 +4,8 @@ from results_processing import results_processing
 
 # Datasets
 # datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin']
-#datasets = ["transfusion"]
-datasets = ["mammographic"]
+datasets = ["transfusion"]
+#datasets = ["mammographic"]
 #datasets = ['dados_covid_sbpo_atual']
 
 for dataset in datasets:
