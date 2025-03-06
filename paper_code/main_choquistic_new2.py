@@ -22,9 +22,9 @@ from scipy.special import expit
 from matplotlib.colors import BoundaryNorm, ListedColormap
 import mod_GenFuzzyRegression
 
-#from sklearn.datasets import make_classification
-#X, y = make_classification(n_samples=500, n_features=2, n_informative=2, n_redundant=0, n_repeated=0, n_classes=2,n_clusters_per_class=1)
-#plot_decision_boundary(X, y, clf)
+# from sklearn.datasets import make_classification
+# X, y = make_classification(n_samples=500, n_features=2, n_informative=2, n_redundant=0, n_repeated=0, n_classes=2,n_clusters_per_class=1)
+# plot_decision_boundary(X, y, clf)
 
 
 class LogisticRegression_new(object):
@@ -53,8 +53,6 @@ class LogisticRegression_new(object):
         self.learning_rate  = learning_rate
         self.max_iter       = max_iter
         self.regularization = regularization
-        #self.C              = C
-        #self.C              = C*np.concatenate((np.ones((2,)),2*np.ones((1,))),axis=0)
         self.tolerance      = tolerance
     
     def fit(self, X, y, C):
@@ -80,13 +78,7 @@ class LogisticRegression_new(object):
             N = X.shape[1]
 
             if self.regularization is not None:
-                #delta_grad = self.learning_rate * ((self.C * (X.T @ errors)) + np.sum(self.theta))
                 delta_grad = self.learning_rate * ((C * (X.T @ errors)) + np.sum(self.theta))
-        
-                #print(np.size(self.C))
-                #print(np.ma.shape(X.T))
-                #print(np.ma.shape(errors))
-            
             else:
                 delta_grad = self.learning_rate * (X.T @ errors)
 
@@ -176,211 +168,164 @@ def plot_decision_boundary(X, y, model):
     plt.ylim(yy.min(), yy.max())
     plt.show()
 
-def nParam_kAdd(kAdd,nAttr):
+def nParam_kAdd(kAdd, nAttr):
     '''Return the number of parameters in a k-additive model'''
     aux_numb = 1
     for ii in range(kAdd):
-        aux_numb += comb(nAttr,ii+1)
+        aux_numb += comb(nAttr, ii+1)
     return aux_numb
 
-    
-def powerset(iterable,k_add):
-    '''Return the powerset (for coalitions until k_add players) of a set of m attributes
-    powerset([1,2,..., m],m) --> () (1,) (2,) (3,) ... (m,) (1,2) (1,3) ... (1,m) ... (m-1,m) ... (1, ..., m)
-    powerset([1,2,..., m],2) --> () (1,) (2,) (3,) ... (m,) (1,2) (1,3) ... (1,m) ... (m-1,m)
-    '''
+def powerset(iterable, k_add):
+    '''Return the powerset (for coalitions until k_add players) of a set of m attributes'''
     s = list(iterable)
     return chain.from_iterable(combinations(s, r) for r in range(k_add+1))
 
-
-def choquet_matrix_mobius(X_orig,kadd):
-    
-    nSamp, nAttr = X_orig.shape # Number of samples (train) and attributes
-    k_add_numb = nParam_kAdd(kadd,nAttr)
-    
-    data_opt = np.zeros((nSamp,k_add_numb-1))
-    
-    for i,s in enumerate(powerset(range(nAttr),kadd)):
+def choquet_matrix_mobius(X_orig, kadd):
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    k_add_numb = nParam_kAdd(kadd, nAttr)
+    data_opt = np.zeros((nSamp, k_add_numb-1))
+    for i, s in enumerate(powerset(range(nAttr), kadd)):
         s = list(s)
-
         if len(s) > 0:
-            data_opt[:,i-1] = np.min(X_orig.iloc[:,s],axis=1)
-            
+            data_opt[:, i-1] = np.min(X_orig.iloc[:, s], axis=1)
     return data_opt
 
 def choquet_matrix(X_orig):
-    
     X_orig_sort = np.sort(X_orig)
     X_orig_sort_ind = np.array(np.argsort(X_orig))
-    nSamp, nAttr = X_orig.shape # Number of samples (train) and attrbiutes
-    X_orig_sort_ext = np.concatenate((np.zeros((nSamp,1)),X_orig_sort),axis=1)
-    
+    nSamp, nAttr = X_orig.shape
+    X_orig_sort_ext = np.concatenate((np.zeros((nSamp, 1)), X_orig_sort), axis=1)
     
     sequence = np.arange(nAttr)
-    
-    combin = (99)*np.ones((2**nAttr-1,nAttr))
+    combin = (99)*np.ones((2**nAttr-1, nAttr))
     count = 0
     for ii in range(nAttr):
-        combin[count:count+comb(nAttr,ii+1),0:ii+1] = np.array(list(itertools.combinations(sequence, ii+1)))
-        count += comb(nAttr,ii+1)
+        combin[count:count+comb(nAttr, ii+1), 0:ii+1] = np.array(list(itertools.combinations(sequence, ii+1)))
+        count += comb(nAttr, ii+1)
     
-    data_opt = np.zeros((nSamp,2**nAttr-1))
+    data_opt = np.zeros((nSamp, 2**nAttr-1))
     for ii in range(nAttr):
         for jj in range(nSamp):
             list1 = combin.tolist()
-            aux = list1.index(np.concatenate((np.sort(X_orig_sort_ind[jj,ii:]),99*np.ones((ii,))),axis=0).tolist())
-            data_opt[jj,aux] = X_orig_sort_ext[jj,ii+1] - X_orig_sort_ext[jj,ii]
-            
+            aux = list1.index(np.concatenate((np.sort(X_orig_sort_ind[jj, ii:]), 99*np.ones((ii,))), axis=0).tolist())
+            data_opt[jj, aux] = X_orig_sort_ext[jj, ii+1] - X_orig_sort_ext[jj, ii]
     return data_opt
 
 def choquet_matrix_2add(X_orig):
-    
     X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape # Number of samples (train) and attrbiutes
-    
+    nSamp, nAttr = X_orig.shape
     k_add = 2
-    k_add_numb = nParam_kAdd(k_add,nAttr)
-    
-    coalit = np.zeros((k_add_numb,nAttr))
-    
-    for i,s in enumerate(powerset(range(nAttr),k_add)):
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
         s = list(s)
-        coalit[i,s] = 1
-        
-    data_opt = np.zeros((nSamp,k_add_numb))
+        coalit[i, s] = 1
+    data_opt = np.zeros((nSamp, k_add_numb))
     for i in range(nAttr):
-        data_opt[:,i+1] = data_opt[:,i+1] + X_orig[:,i]
-        
-        for i2 in range(i+1,nAttr):
-            data_opt[:,(coalit[:,[i,i2]]==1).all(axis=1)] = (np.min([X_orig[:,i],X_orig[:,i2]],axis=0)).reshape(nSamp,1)
-            
-        for ii in range(nAttr+1,len(coalit)):
-            if coalit[ii,i]==1:
-                data_opt[:,ii] = data_opt[:,ii] + (-1/2)*X_orig[:,i]
-
-    return data_opt[:,1:]
+        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
+        for i2 in range(i+1, nAttr):
+            data_opt[:, (coalit[:, [i, i2]]==1).all(axis=1)] = (np.min([X_orig[:, i], X_orig[:, i2]], axis=0)).reshape(nSamp, 1)
+        for ii in range(nAttr+1, len(coalit)):
+            if coalit[ii, i] == 1:
+                data_opt[:, ii] = data_opt[:, ii] + (-1/2)*X_orig[:, i]
+    return data_opt[:, 1:]
 
 def mlm_matrix(X_orig):
-    
-    nSamp, nAttr = X_orig.shape # Number of samples (train) and attrbiutes
+    nSamp, nAttr = X_orig.shape
     X_orig = np.array(X_orig)
-    data_opt = np.zeros((nSamp,2**nAttr))
-    for i,s in enumerate(powerset(range(nAttr),nAttr)):
+    data_opt = np.zeros((nSamp, 2**nAttr))
+    for i, s in enumerate(powerset(range(nAttr), nAttr)):
         s = list(s)
-        data_opt[:,i] = math.prod(X_orig[:,[s]].T) * math.prod(1-X_orig[:,[diff(np.arange(nAttr),s)]].T)
-        
-    return data_opt[:,1:]
+        data_opt[:, i] = math.prod(X_orig[:, [s]].T) * math.prod(1-X_orig[:, [diff(np.arange(nAttr), s)]].T)
+    return data_opt[:, 1:]
 
 def mlm_matrix_2add(X_orig):
-    
     X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape # Number of samples (train) and attrbiutes
-    
+    nSamp, nAttr = X_orig.shape
     k_add = 2
-    k_add_numb = nParam_kAdd(k_add,nAttr)
-    
-    coalit = np.zeros((k_add_numb,nAttr))
-    
-    for i,s in enumerate(powerset(range(nAttr),k_add)):
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
         s = list(s)
-        coalit[i,s] = 1
-        
-    data_opt = np.zeros((nSamp,k_add_numb))
-    
+        coalit[i, s] = 1
+    data_opt = np.zeros((nSamp, k_add_numb))
     for i in range(nAttr):
-        data_opt[:,i+1] = data_opt[:,i+1] + X_orig[:,i]
-        
-        for i2 in range(i+1,nAttr):
-            data_opt[:,(coalit[:,[i,i2]]==1).all(axis=1)] = (X_orig[:,i]* X_orig[:,i2]).reshape(nSamp,1)
-            
-        for ii in range(nAttr+1,len(coalit)):
-            if coalit[ii,i]==1:
-                data_opt[:,ii] = data_opt[:,ii] + (-1/2)*X_orig[:,i]
-                
-    return data_opt[:,1:]
+        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
+        for i2 in range(i+1, nAttr):
+            data_opt[:, (coalit[:, [i, i2]]==1).all(axis=1)] = (X_orig[:, i]* X_orig[:, i2]).reshape(nSamp, 1)
+        for ii in range(nAttr+1, len(coalit)):
+            if coalit[ii, i] == 1:
+                data_opt[:, ii] = data_opt[:, ii] + (-1/2)*X_orig[:, i]
+    return data_opt[:, 1:]
 
 def tr_shap2game(nAttr, k_add):
-    '''Return the transformation matrix from Shapley interaction indices to game, given a k-additive model '''
-    nBern = bernoulli(k_add) #Números de Bernoulli
-    k_add_numb = nParam_kAdd(k_add,nAttr)
-    
-    coalit = np.zeros((k_add_numb,nAttr))
-    
-    for i,s in enumerate(powerset(range(nAttr),k_add)):
+    '''Return the transformation matrix from Shapley interaction indices to game, given a k-additive model'''
+    nBern = bernoulli(k_add)  # Bernoulli numbers
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
         s = list(s)
-        coalit[i,s] = 1
-        
-    matrix_shap2game = np.zeros((k_add_numb,k_add_numb))
+        coalit[i, s] = 1
+    matrix_shap2game = np.zeros((k_add_numb, k_add_numb))
     for i in range(coalit.shape[0]):
         for i2 in range(k_add_numb):
-            aux2 = int(sum(coalit[i2,:]))
-            aux3 = int(sum(coalit[i,:] * coalit[i2,:]))
+            aux2 = int(sum(coalit[i2, :]))
+            aux3 = int(sum(coalit[i, :] * coalit[i2, :]))
             aux4 = 0
             for i3 in range(int(aux3+1)):
                 aux4 += comb(aux3, i3) * nBern[aux2-i3]
-            matrix_shap2game[i,i2] = aux4
+            matrix_shap2game[i, i2] = aux4
     return matrix_shap2game
 
-
 def tr_banz2game(nAttr, k_add):
-    '''Return the transformation matrix from Banzhaf interaction indices, given a k_additive model, to game'''
-    nBern = bernoulli(k_add) #Números de Bernoulli
-    k_add_numb = nParam_kAdd(k_add,nAttr)
-    
-    coalit = np.zeros((k_add_numb,nAttr))
-    
-    for i,s in enumerate(powerset(range(nAttr),k_add)):
+    '''Return the transformation matrix from Banzhaf interaction indices, given a k-additive model, to game'''
+    nBern = bernoulli(k_add)
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
         s = list(s)
-        coalit[i,s] = 1
-        
-    matrix_banz2game = np.zeros((k_add_numb,k_add_numb))
+        coalit[i, s] = 1
+    matrix_banz2game = np.zeros((k_add_numb, k_add_numb))
     for i in range(coalit.shape[0]):
-        A = coalit[i,:]
+        A = coalit[i, :]
         cardA = int(sum(A))
         for i2 in range(k_add_numb):
-            B = coalit[i2,:]
+            B = coalit[i2, :]
             cardB = int(sum(B))
             cardBminusA = sum((B - A) > 0)
-            matrix_banz2game[i,i2] = ((1/2)**cardB) * ((-1)**cardBminusA)
+            matrix_banz2game[i, i2] = ((1/2)**cardB) * ((-1)**cardBminusA)
     return matrix_banz2game
 
 def diff(first, second):
-        second = set(second)
-        return [item for item in first if item not in second]
+    second = set(second)
+    return [item for item in first if item not in second]
 
 ''' Importing dataset '''
-# data_imp is the dataset to import (banknotes,transfusion,mammographic,raisin,rice,diabetes,wine,compas,lsac_new,skin,seeds,iris,user_knowledge,)
-# n_samp is the number of random samples to consider when calculating HSIC (set 0 if use all samples)
-# X and y are the full dataset; X_hsic and y_hsic are the subsamples to calculate HSIC
-#data_imp = 'raisin'
-#data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','wine','compas','lsac_new','skin','dados_covid_sbpo'])
-data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
-#data_imp = list(['covid_gamma','covid_delta','covid_omicron','dados_covid_sbpo'])
-#data_imp = list(['dados_covid_sbpo_atual'])
+# data_imp is the dataset to import (banknotes, transfusion, mammographic, raisin, rice, diabetes, skin, dados_covid_sbpo_atual)
+#data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
+# data_imp = list(['covid_gamma','covid_delta','covid_omicron','dados_covid_sbpo'])
+data_imp = list(['dados_covid_sbpo_atual'])
 
 attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
+# solver_lr = ('lbfgs', 'newton-cg', 'sag','saga')
+solver_lr = ('newton-cg',)
 
+nSimul = 1  # 50 simulations
 
-#solver_lr = ('lbfgs', 'newton-cg', 'sag','saga')
-solver_lr = ('newton-cg','sag')
+accuracy_linear_train = np.zeros((len(data_imp), len(solver_lr), nSimul))
+accuracy_linear_test = np.zeros((len(data_imp), len(solver_lr), nSimul))
 
+accuracy_choquet_kadd_train = np.zeros((len(data_imp), len(solver_lr), nSimul))
+accuracy_choquet_kadd_test = np.zeros((len(data_imp), len(solver_lr), nSimul))
 
-nSimul = 50 # 50 simulations
+accuracy_choquet_train = np.zeros((len(data_imp), len(solver_lr), nSimul))
+accuracy_choquet_test = np.zeros((len(data_imp), len(solver_lr), nSimul))
 
-accuracy_linear_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
-accuracy_linear_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
+accuracy_mlm_kadd_train = np.zeros((len(data_imp), len(solver_lr), nSimul))
+accuracy_mlm_kadd_test = np.zeros((len(data_imp), len(solver_lr), nSimul))
 
-accuracy_choquet_kadd_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
-accuracy_choquet_kadd_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
-
-accuracy_choquet_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
-accuracy_choquet_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
-
-accuracy_mlm_kadd_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
-accuracy_mlm_kadd_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
-
-accuracy_mlm_train = np.zeros((len(data_imp),len(solver_lr),nSimul))
-accuracy_mlm_test = np.zeros((len(data_imp),len(solver_lr),nSimul))
+accuracy_mlm_train = np.zeros((len(data_imp), len(solver_lr), nSimul))
+accuracy_mlm_test = np.zeros((len(data_imp), len(solver_lr), nSimul))
 
 param_linear_train = []
 param_choquet_train = []
@@ -393,23 +338,20 @@ for ll in range(len(data_imp)):
     X, y = mod_GenFuzzyRegression.func_read_data(data_imp[ll])
     
     # Data parameters
-    nSamp,nAttr = X.shape
+    nSamp, nAttr = X.shape
     
-    
-    # Transformation matrix Shapley to game
+    # Compute transformation matrices for the full Choquet model.
+    # These matrices allow you to map between the game parameters (regression coefficients)
+    # and the Shapley or Banzhaf interaction indices.
     matrix_s2g = tr_shap2game(nAttr, nAttr)
-    matrix_s2g = matrix_s2g[1:,:]
-    
+    matrix_s2g = matrix_s2g[1:, :]  # Remove the empty coalition row
     matrix_b2g = tr_banz2game(nAttr, nAttr)
-    matrix_b2g = matrix_b2g[1:,:]
+    matrix_b2g = matrix_b2g[1:, :]
     
-    
-    n_2add = nParam_kAdd(2,nAttr)
-    n_2add = nAttr+1
+    n_2add = nParam_kAdd(2, nAttr)
+    n_2add = nAttr + 1
     
     # Normalization 0-1
-    #from sklearn.preprocessing import StandardScaler
-    #X = StandardScaler().fit_transform(X)
     X = (X - X.min()) / (X.max() - X.min())
     
     # Choquet integral matrix
@@ -420,98 +362,98 @@ for ll in range(len(data_imp)):
     X_mlm = mlm_matrix(X)
     X_mlm_2add = mlm_matrix_2add(X)
     
-    
     for kk in range(nSimul):
         
-        indices = np.arange(np.size(X,0))
+        indices = np.arange(np.size(X, 0))
         X_train, X_test, y_train, y_test, indices_train, indices_test = train_test_split(X, y, indices, test_size=0.2, stratify=y)
         
-        X_choquet_train = X_choquet[indices_train,:]
-        X_choquet_kadd_train = X_choquet_2add[indices_train,:]
+        X_choquet_train = X_choquet[indices_train, :]
+        X_choquet_kadd_train = X_choquet_2add[indices_train, :]
+        X_choquet_test = X_choquet[indices_test, :]
+        X_choquet_kadd_test = X_choquet_2add[indices_test, :]
         
-        X_choquet_test = X_choquet[indices_test,:]
-        X_choquet_kadd_test = X_choquet_2add[indices_test,:]
-        
-        X_mlm_train = X_mlm[indices_train,:]
-        X_mlm_kadd_train = X_mlm_2add[indices_train,:]
-        
-        X_mlm_test = X_mlm[indices_test,:]
-        X_mlm_kadd_test = X_mlm_2add[indices_test,:]
+        X_mlm_train = X_mlm[indices_train, :]
+        X_mlm_kadd_train = X_mlm_2add[indices_train, :]
+        X_mlm_test = X_mlm[indices_test, :]
+        X_mlm_kadd_test = X_mlm_2add[indices_test, :]
         
         for ii in range(len(solver_lr)):
         
-            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
-            log_reg.fit(X_train,y_train)
-            accuracy_linear_train[ll,ii,kk] = log_reg.score(X_train,y_train)
-            accuracy_linear_test[ll,ii,kk] = log_reg.score(X_test,y_test)
+            log_reg = LogisticRegression(random_state=0, penalty=None, solver=solver_lr[ii], max_iter=10000)
+            log_reg.fit(X_train, y_train)
+            accuracy_linear_train[ll, ii, kk] = log_reg.score(X_train, y_train)
+            accuracy_linear_test[ll, ii, kk] = log_reg.score(X_test, y_test)
             param_linear_train.append(log_reg.coef_)
             n_iterations['LR'].append(log_reg.n_iter_)
             
-            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
-            log_reg.fit(X_choquet_kadd_train,y_train)
-            accuracy_choquet_kadd_train[ll,ii,kk] = log_reg.score(X_choquet_kadd_train,y_train)
-            accuracy_choquet_kadd_test[ll,ii,kk] = log_reg.score(X_choquet_kadd_test,y_test)
+            log_reg = LogisticRegression(random_state=0, penalty=None, solver=solver_lr[ii], max_iter=10000)
+            log_reg.fit(X_choquet_kadd_train, y_train)
+            accuracy_choquet_kadd_train[ll, ii, kk] = log_reg.score(X_choquet_kadd_train, y_train)
+            accuracy_choquet_kadd_test[ll, ii, kk] = log_reg.score(X_choquet_kadd_test, y_test)
             param_choquet_kadd_train.append(log_reg.coef_)
             n_iterations['CR2add'].append(log_reg.n_iter_)
             
-            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
-            log_reg.fit(X_choquet_train,y_train)
-            accuracy_choquet_train[ll,ii,kk] = log_reg.score(X_choquet_train,y_train)
-            accuracy_choquet_test[ll,ii,kk] = log_reg.score(X_choquet_test,y_test)
+            log_reg = LogisticRegression(random_state=0, penalty=None, solver=solver_lr[ii], max_iter=10000)
+            log_reg.fit(X_choquet_train, y_train)
+            accuracy_choquet_train[ll, ii, kk] = log_reg.score(X_choquet_train, y_train)
+            accuracy_choquet_test[ll, ii, kk] = log_reg.score(X_choquet_test, y_test)
             param_choquet_train.append(log_reg.coef_)
             n_iterations['CR'].append(log_reg.n_iter_)
             
-            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
-            log_reg.fit(X_mlm_kadd_train,y_train)
-            accuracy_mlm_kadd_train[ll,ii,kk] = log_reg.score(X_mlm_kadd_train,y_train)
-            accuracy_mlm_kadd_test[ll,ii,kk] = log_reg.score(X_mlm_kadd_test,y_test)
+            log_reg = LogisticRegression(random_state=0, penalty=None, solver=solver_lr[ii], max_iter=10000)
+            log_reg.fit(X_mlm_kadd_train, y_train)
+            accuracy_mlm_kadd_train[ll, ii, kk] = log_reg.score(X_mlm_kadd_train, y_train)
+            accuracy_mlm_kadd_test[ll, ii, kk] = log_reg.score(X_mlm_kadd_test, y_test)
             param_mlm_kadd_train.append(log_reg.coef_)
             n_iterations['MLMR2add'].append(log_reg.n_iter_)
             
-            log_reg = LogisticRegression(random_state=0,penalty=None,solver = solver_lr[ii],max_iter=10000)
-            log_reg.fit(X_mlm_train,y_train)
-            accuracy_mlm_train[ll,ii,kk] = log_reg.score(X_mlm_train,y_train)
-            accuracy_mlm_test[ll,ii,kk] = log_reg.score(X_mlm_test,y_test)
+            log_reg = LogisticRegression(random_state=0, penalty=None, solver=solver_lr[ii], max_iter=10000)
+            log_reg.fit(X_mlm_train, y_train)
+            accuracy_mlm_train[ll, ii, kk] = log_reg.score(X_mlm_train, y_train)
+            accuracy_mlm_test[ll, ii, kk] = log_reg.score(X_mlm_test, y_test)
             param_mlm_train.append(log_reg.coef_)
             n_iterations['MLMR'].append(log_reg.n_iter_)
                       
-            print(ll+1,'/',len(data_imp),'-',kk,'/',nSimul,'-',ii+1,'/',len(solver_lr))
+            print(ll+1, '/', len(data_imp), '-', kk, '/', nSimul, '-', ii+1, '/', len(solver_lr))
             
 # exit();
 
-data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
-np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
-#accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr = np.load('results_logistic_all.npy', allow_pickle=True)
+data_save = [accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, 
+             accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, 
+             accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, 
+             param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr]
+#np.save('results_logistic_all_test.npy', np.array(data_save, dtype=object), allow_pickle=True)
+# accuracy_linear_train, accuracy_linear_test, accuracy_choquet_kadd_train, accuracy_choquet_kadd_test, accuracy_choquet_train, accuracy_choquet_test, accuracy_mlm_kadd_train, accuracy_mlm_kadd_test, accuracy_mlm_train, accuracy_mlm_test, data_imp, param_linear_train, param_choquet_train, param_choquet_kadd_train, param_mlm_train, param_mlm_kadd_train, solver_lr = np.load('results_logistic_all.npy', allow_pickle=True)
     
-accuracy_linear_train_mean = np.mean(accuracy_linear_train,axis=2)
-accuracy_linear_test_mean = np.mean(accuracy_linear_test,axis=2)
+accuracy_linear_train_mean = np.mean(accuracy_linear_train, axis=2)
+accuracy_linear_test_mean = np.mean(accuracy_linear_test, axis=2)
     
-accuracy_choquet_kadd_train_mean = np.mean(accuracy_choquet_kadd_train,axis=2)
-accuracy_choquet_kadd_test_mean = np.mean(accuracy_choquet_kadd_test,axis=2)
+accuracy_choquet_kadd_train_mean = np.mean(accuracy_choquet_kadd_train, axis=2)
+accuracy_choquet_kadd_test_mean = np.mean(accuracy_choquet_kadd_test, axis=2)
 
-accuracy_choquet_train_mean = np.mean(accuracy_choquet_train,axis=2)
-accuracy_choquet_test_mean = np.mean(accuracy_choquet_test,axis=2)
+accuracy_choquet_train_mean = np.mean(accuracy_choquet_train, axis=2)
+accuracy_choquet_test_mean = np.mean(accuracy_choquet_test, axis=2)
     
-accuracy_mlm_kadd_train_mean = np.mean(accuracy_mlm_kadd_train,axis=2)
-accuracy_mlm_kadd_test_mean = np.mean(accuracy_mlm_kadd_test,axis=2)
+accuracy_mlm_kadd_train_mean = np.mean(accuracy_mlm_kadd_train, axis=2)
+accuracy_mlm_kadd_test_mean = np.mean(accuracy_mlm_kadd_test, axis=2)
 
-accuracy_mlm_train_mean = np.mean(accuracy_mlm_train,axis=2)
-accuracy_mlm_test_mean = np.mean(accuracy_mlm_test,axis=2)  
+accuracy_mlm_train_mean = np.mean(accuracy_mlm_train, axis=2)
+accuracy_mlm_test_mean = np.mean(accuracy_mlm_test, axis=2)  
 
-accuracy_linear_train_std = np.std(accuracy_linear_train,axis=2)
-accuracy_linear_test_std = np.std(accuracy_linear_test,axis=2)
+accuracy_linear_train_std = np.std(accuracy_linear_train, axis=2)
+accuracy_linear_test_std = np.std(accuracy_linear_test, axis=2)
     
-accuracy_choquet_kadd_train_std = np.std(accuracy_choquet_kadd_train,axis=2)
-accuracy_choquet_kadd_test_std = np.std(accuracy_choquet_kadd_test,axis=2)
+accuracy_choquet_kadd_train_std = np.std(accuracy_choquet_kadd_train, axis=2)
+accuracy_choquet_kadd_test_std = np.std(accuracy_choquet_kadd_test, axis=2)
 
-accuracy_choquet_train_std = np.std(accuracy_choquet_train,axis=2)
-accuracy_choquet_test_std = np.std(accuracy_choquet_test,axis=2)
+accuracy_choquet_train_std = np.std(accuracy_choquet_train, axis=2)
+accuracy_choquet_test_std = np.std(accuracy_choquet_test, axis=2)
     
-accuracy_mlm_kadd_train_std = np.std(accuracy_mlm_kadd_train,axis=2)
-accuracy_mlm_kadd_test_std = np.std(accuracy_mlm_kadd_test,axis=2)
+accuracy_mlm_kadd_train_std = np.std(accuracy_mlm_kadd_train, axis=2)
+accuracy_mlm_kadd_test_std = np.std(accuracy_mlm_kadd_test, axis=2)
 
-accuracy_mlm_train_std = np.std(accuracy_mlm_train,axis=2)
-accuracy_mlm_test_std = np.std(accuracy_mlm_test,axis=2)
+accuracy_mlm_train_std = np.std(accuracy_mlm_train, axis=2)
+accuracy_mlm_test_std = np.std(accuracy_mlm_test, axis=2)
 
 iterations_mean = {key: np.mean(val) for key, val in n_iterations.items()}
 iterations_std = {key: np.std(val) for key, val in n_iterations.items()}
@@ -522,10 +464,49 @@ print([accuracy_linear_train_mean, accuracy_choquet_train_mean, accuracy_choquet
 print([accuracy_linear_train_std, accuracy_choquet_train_std, accuracy_choquet_kadd_train_std, accuracy_mlm_train_std, accuracy_mlm_kadd_train_std])
 
 print([accuracy_linear_test_mean, accuracy_choquet_test_mean, accuracy_choquet_kadd_test_mean, accuracy_mlm_test_mean, accuracy_mlm_kadd_test_mean])
-print([accuracy_linear_test_std, accuracy_choquet_test_std, accuracy_choquet_kadd_test_std, accuracy_mlm_test_std, accuracy_mlm_kadd_test_mean])
+print([accuracy_linear_test_std, accuracy_choquet_test_std, accuracy_choquet_kadd_test_std, accuracy_mlm_test_std, accuracy_mlm_kadd_test_std])
 
 
-#exit();
+
+if len(param_choquet_train) > 0:
+    # Average the full-Choquet coefficients over all simulation runs
+    game_params_avg = np.mean(np.vstack(param_choquet_train), axis=0)
+    # Recover Shapley indices using the pseudo-inverse of the transformation matrix
+    recovered_shapley = np.linalg.pinv(matrix_s2g) @ game_params_avg
+    # Recover Banzhaf indices similarly (if needed)
+    recovered_banzhaf = np.linalg.pinv(matrix_b2g) @ game_params_avg
+
+    # We assume that the first nAttr entries in recovered_shapley are the singleton contributions.
+    singleton_shapley = recovered_shapley[:nAttr]
+    
+    # Define feature names (adjust as needed)
+    feature_names = ['Fever', 'Cough', 'Sore throat', 'Runny nose', 'Myalgia', 
+                     'Nausea', 'Diarrhea', 'Loss of smell', 'Shortness of breath']
+    
+    # Order features by descending Shapley value (largest first)
+    ordered_indices = np.argsort(singleton_shapley)[::-1]
+    names_ordered = np.array(feature_names)[ordered_indices]
+    values_ordered = singleton_shapley[ordered_indices]
+    
+    # Create the horizontal bar chart with descending values
+    plt.figure(figsize=(10, 8))
+    plt.barh(names_ordered, values_ordered, color='green', edgecolor='black')
+    plt.xlabel('Shapley Value', fontsize=24)
+    plt.title('Shapely Values for Features', fontsize=28)
+    plt.tight_layout()
+
+    # Set up x-axis ticks and vertical grid lines at intervals of 0.25
+    ax = plt.gca()
+    ax.xaxis.set_major_locator(plt.MultipleLocator(0.25))
+    ax.grid(True, which='major', axis='x', linestyle='--', linewidth=0.5)
+    
+    # Save the plot
+    os.makedirs("plots", exist_ok=True)
+    shapely_plot_path = os.path.join("plots", "shapely_values.png")
+    plt.savefig(shapely_plot_path)
+    plt.close()
+    print("Saved Shapley values plot to:", shapely_plot_path)
+
 
 #covid_param = param_choquet_kadd_train[700:]
 covid_param = param_choquet_kadd_train
@@ -535,21 +516,17 @@ covid_param_aux = []
 for ii in lista:
     covid_param_aux.append(covid_param[ii])
 
-
-param_values = np.zeros((len(covid_param_aux),len(covid_param_aux[ii][0])))
+param_values = np.zeros((len(covid_param_aux), len(covid_param_aux[ii][0])))
 for ii in range(len(covid_param_aux)):
-    param_values[ii,:] = covid_param_aux[ii][0]
-covid_param_mean = np.mean(param_values,axis=0)[0:9]
-covid_param_std = np.std(param_values,axis=0)[0:9]
-
+    param_values[ii, :] = covid_param_aux[ii][0]
+covid_param_mean = np.mean(param_values, axis=0)[0:9]
+covid_param_std = np.std(param_values, axis=0)[0:9]
 
 import matplotlib.pyplot as plt
 import numpy as np
 import itertools
 import os
 
-# Debug: Print the current working directory
-print("Current working directory:", os.getcwd())
 
 # Ensure the "plots" folder exists
 os.makedirs("plots", exist_ok=True)
@@ -602,22 +579,16 @@ plot_aux = plot_aux + plot_aux.T
 plt.figure(figsize=(8, 6))
 plt.imshow(plot_aux)
 plt.colorbar(orientation="vertical")
-pos = np.arange(len(names))
-plt.yticks(pos, names)
-plt.xticks(pos, names, rotation=90)
+pos = np.arange(len(feature_names))
+plt.yticks(pos, feature_names)
+plt.xticks(pos, feature_names, rotation=90)
 plt.title("Interaction effects among symptoms")
-
-# Save the second plot
 interaction_plot_path = os.path.join("plots", "interaction_effects.png")
 plt.savefig(interaction_plot_path)
 plt.close()
 print("Saved interaction effects plot to:", interaction_plot_path)
 
-
-
 # Interpreting odds change
-#aa=pd.DataFrame([1,1,0,0,1,0,0,0,0]).T
-#bb=choquet_matrix_2add(aa)
-#log_reg.predict_proba(bb)
-
-
+# aa = pd.DataFrame([1,1,0,0,1,0,0,0,0]).T
+# bb = choquet_matrix_2add(aa)
+# log_reg.predict_proba(bb)
