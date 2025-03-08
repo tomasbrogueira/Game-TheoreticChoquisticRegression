@@ -37,3 +37,156 @@ def plot_horizontal_bar(names, values, std=None, title="", xlabel="", filename="
     plt.savefig(filename)
     plt.close()
     print("Saved plot to:", filename)
+
+
+
+
+# Functions for overall interaction feature importance
+
+def weighted_pairwise_interaction_effect(v, interaction_matrix, m):
+    """
+    Compute the weighted interaction effect for each feature in 2-additive models.
+    
+    Args:
+        v (np.array): Coefficients for singletons (first m entries) and pairs (remaining entries).
+        interaction_matrix (np.array): Symmetric matrix of pairwise interaction indices.
+        m (int): Number of features.
+    
+    Returns:
+        np.array: Weighted interaction effect for each feature.
+    """
+    # Extract pairwise coefficients (assuming v is ordered as [singletons, pairs])
+    pair_coefs = v[m:]
+    
+    # Map pairwise coefficients to interaction matrix
+    weighted_matrix = np.zeros((m, m))
+    idx = 0
+    for i in range(m):
+        for j in range(i+1, m):
+            weighted_matrix[i, j] = pair_coefs[idx] * interaction_matrix[i, j]
+            weighted_matrix[j, i] = weighted_matrix[i, j]  # Symmetry
+            idx += 1
+    
+    # Sum absolute values for overall effect
+    return np.sum(np.abs(weighted_matrix), axis=1)
+
+
+def weighted_full_interaction_effect(v, all_coalitions, m, index_type='shapley'):
+    """
+    Compute the weighted interaction effect for each feature in full Choquet models.
+    
+    Args:
+        v (np.array): Coefficients for all nonempty coalitions.
+        all_coalitions (list): List of all nonempty coalitions (tuples).
+        m (int): Number of features.
+        index_type (str): 'shapley' or 'banzhaf'.
+    
+    Returns:
+        np.array: Weighted interaction effect for each feature.
+    """
+    weighted_effect = np.zeros(m)
+    coalition_to_index = {coal: idx for idx, coal in enumerate(all_coalitions)}
+
+    from regression_classes import shapley_interaction_index, banzhaf_interaction_index
+    
+    for A in all_coalitions:
+        if len(A) < 2:
+            continue  # Skip singletons (no interaction)
+        
+        # Compute interaction index for coalition A
+        if index_type == 'shapley':
+            I_A = shapley_interaction_index(A, all_coalitions, v, m)
+        else:
+            I_A = banzhaf_interaction_index(A, all_coalitions, v, m)
+        
+        # Weight by the coalition's coefficient (absolute value)
+        weight = np.abs(v[coalition_to_index[A]])
+        
+        # Distribute the weighted interaction effect to all features in A
+        for i in A:
+            weighted_effect[i] += weight * np.abs(I_A)
+    
+    return weighted_effect
+
+
+
+# Interaction to Shapely Ratio (ISR) functions
+
+import itertools
+import numpy as np
+
+import itertools
+import numpy as np
+
+import itertools
+import numpy as np
+
+def total_interaction_contribution(interaction_matrix, all_coalitions, m):
+    """
+    Compute normalized interaction contribution per feature, adjusted for combinatorial scaling.
+
+    Args:
+        interaction_matrix (np.array): Interaction indices matrix (Shapley/Banzhaf); assumed 2D.
+        all_coalitions (list): List of all coalitions (tuples) used in the model.
+        m (int): Number of features.
+    
+    Returns:
+        np.array: Normalized interaction contribution per feature ∈ [0, 1].
+    """
+    interaction_matrix = np.array(interaction_matrix)
+    # If a list (or 3D array) of matrices is passed, average over the first axis.
+    if interaction_matrix.ndim > 2:
+        interaction_matrix = np.mean(interaction_matrix, axis=0)
+    
+    tic = np.zeros(m)
+    coalition_counts = np.zeros(m)
+    
+    for A in all_coalitions:
+        if len(A) < 2:
+            continue  # Skip singletons
+        for i in A:
+            if len(A) == 2:
+                elem = np.abs(interaction_matrix[int(A[0]), int(A[1])])
+                if np.size(elem) == 1:
+                    val = float(elem)
+                else:
+                    val = float(np.sum(elem))
+                tic[i] += val
+            else:
+                # For higher-order coalitions, sum over all unique pairs.
+                pair_sum = 0.0
+                for u, v in itertools.combinations(A, 2):
+                    pair_sum += np.abs(interaction_matrix[int(u), int(v)])
+                tic[i] += pair_sum
+            coalition_counts[i] += 1
+
+    tic_normalized = np.divide(tic, coalition_counts, where=(coalition_counts != 0))
+    return tic_normalized / np.sum(tic_normalized)
+
+
+def interaction_shapley_ratio(shapley_values, interaction_matrix, all_coalitions, m):
+    """
+    Compute Interaction-to-Shapley Ratio (ISR) for each feature.
+    
+    Args:
+        shapley_values (np.array): Shapley values (all coalition contributions).
+        interaction_matrix (np.array): Interaction indices matrix.
+        all_coalitions (list): List of all coalitions.
+        m (int): Number of features.
+    
+    Returns:
+        np.array: ISR per feature ∈ [0, 1], where 0 = no interaction, 1 = all interaction.
+    """
+    # In our Choquet model the coefficient vector contains both singleton and interaction values.
+    # Use only singleton Shapley contributions (first m elements) for computing the ratio.
+    if shapley_values.shape[0] != m:
+        tsc = np.abs(shapley_values[:m])
+    else:
+        tsc = np.abs(shapley_values)
+    
+    tic = total_interaction_contribution(interaction_matrix, all_coalitions, m)
+    
+    # Avoid division by zero
+    total_contribution = tsc + tic
+    isr = np.divide(tic, total_contribution, where=(total_contribution != 0))
+    return isr

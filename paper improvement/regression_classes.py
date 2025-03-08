@@ -29,6 +29,20 @@ def powerset(iterable, k_add):
 # =============================================================================
 # Choquet Transformation Functions
 # =============================================================================
+
+
+
+def choquet_matrix_mobius(X_orig, kadd):
+    nSamp, nAttr = X_orig.shape  # Number of samples and attributes
+    k_add_numb = nParam_kAdd(kadd, nAttr)
+    data_opt = np.zeros((nSamp, k_add_numb-1))
+    for i, s in enumerate(powerset(range(nAttr), kadd)):
+        s = list(s)
+        if len(s) > 0:
+            data_opt[:, i-1] = np.min(X_orig.iloc[:, s], axis=1)
+    return data_opt
+
+
 def choquet_matrix(X_orig, all_coalitions=None):
     """
     X_orig : array-like of shape (n_samples, n_features)
@@ -425,11 +439,43 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 
 
 # =============================================================================
-# Explicit Interpretability Functions (shared utilities)
+# Explicit Interpretability Functions 
 # =============================================================================
+
+
+
+# =============================================================================
+# Power indices 
+# =============================================================================
+def compute_shapely_values(v, m, all_coalitions):
+    """
+    Compute Shapley values for a given Choquet model.
+    Parameters:
+      - v: 1D array of learned coefficients (ordered as in all_coalitions)
+      - m: number of original features
+      - all_coalitions: list of tuples representing all nonempty coalitions
+        (as produced by the choquet_matrix transformation)
+    Returns:
+      - A 1D numpy array of Shapley values.
+    """
+    denom = factorial(m)
+    phi = np.zeros(m)
+    for j in range(m):
+        for r in range(0, m):
+            for B in itertools.combinations([i for i in range(m) if i != j], r):
+                vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
+                Bj = tuple(sorted(B + (j,)))
+                try:
+                    vBj = v[all_coalitions.index(Bj)]
+                except ValueError:
+                    continue
+                weight = (factorial(m - r - 1) * factorial(r)) / denom
+                phi[j] += weight * (vBj - vB)
+    return phi
+
 def compute_banzhaf_indices(v, m, all_coalitions):
     """
-    Compute Banzhaf indices explicitly given learned coefficients v, number of features m,
+    Compute Banzhaf power indices explicitly given learned coefficients v, number of features m,
     and the list of all nonempty coalitions.
     """
     phi_b = np.zeros(m)
@@ -445,6 +491,11 @@ def compute_banzhaf_indices(v, m, all_coalitions):
                     continue
                 phi_b[j] += vBj - vB
     return phi_b / norm
+
+
+# =============================================================================
+# Interaction matrixes 
+# =============================================================================
 
 
 def compute_banzhaf_interaction_matrix(v, m, all_coalitions):
@@ -501,6 +552,145 @@ def compute_banzhaf_interaction_matrix(v, m, all_coalitions):
             interaction_matrix[i, j] = total / norm
             interaction_matrix[j, i] = total / norm
     return interaction_matrix
+
+
+
+def compute_choquet_interaction_matrix(v, m, all_coalitions):
+    """
+    Compute the pairwise Shapley interaction indices between features.
+    
+    For each distinct pair (i, j), the interaction index is computed as:
+    
+      Iₛᵢ,ⱼ = Σ₍B ⊆ M\{i,j}₎ [((m - |B| - 2)! * |B|!)/(m - 1)! * (μ(B ∪ {i,j}) - μ(B ∪ {i}) - μ(B ∪ {j}) + μ(B))]
+    
+    Parameters:
+        v : array-like
+            Value function evaluated on each coalition (μ).
+        m : int
+            Number of features.
+        all_coalitions : list of tuples
+            List of coalitions (each is a sorted tuple of feature indices).
+            Should include the empty set.
+            
+    Returns:
+        interaction_matrix : np.array of shape (m, m)
+            A symmetric matrix where entry (i, j) is the Shapley interaction index between features i and j.
+    """
+    interaction_matrix = np.zeros((m, m))
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    
+    for i in range(m):
+        for j in range(i+1, m):
+            total = 0.0
+            # Consider subsets B of the features excluding both i and j.
+            others = [k for k in range(m) if k not in (i, j)]
+            for r in range(0, len(others)+1):
+                for B in itertools.combinations(others, r):
+                    B = tuple(sorted(B))
+                    # Weight: ((m - |B| - 2)! * |B|! ) / (m - 1)!
+                    weight = factorial(m - r - 2) * factorial(r) / factorial(m - 1)
+                    vB = v[coalition_to_index[B]] if B in coalition_to_index else 0.0
+                    Bi = tuple(sorted(B + (i,)))
+                    Bj = tuple(sorted(B + (j,)))
+                    Bij = tuple(sorted(B + (i, j)))
+                    vBi = v[coalition_to_index[Bi]] if Bi in coalition_to_index else 0.0
+                    vBj = v[coalition_to_index[Bj]] if Bj in coalition_to_index else 0.0
+                    vBij = v[coalition_to_index[Bij]] if Bij in coalition_to_index else 0.0
+                    total += weight * (vBij - vBi - vBj + vB)
+            interaction_matrix[i, j] = total
+            interaction_matrix[j, i] = total  # Ensure symmetry
+    return interaction_matrix
+
+
+# =============================================================================
+# Interaction indices  
+# Might be usefull for iterating over all coallitions and seing how much interaction matters
+# =============================================================================
+
+from math import factorial
+from itertools import chain, combinations
+
+def shapley_interaction_index(A, all_coalitions, v, m):
+    """
+    Compute the Shapley interaction index I^S(A) for subset A.
+    
+    Args:
+        A (tuple): Target coalition (e.g., (0, 1) for interaction between features 0 and 1).
+        all_coalitions (list): List of all nonempty coalitions (as tuples).
+        v (np.array): Learned game parameters (μ values for each coalition).
+        m (int): Total number of features.
+    
+    Returns:
+        float: Shapley interaction index for coalition A.
+    """
+    A = set(A)
+    M_minus_A = set(range(m)) - A
+    coalition_to_index = {coal: idx for idx, coal in enumerate(all_coalitions)}
+    I_S = 0.0
+    
+    # Iterate over all B ⊆ M \ A
+    for B in chain.from_iterable(combinations(M_minus_A, r) for r in range(len(M_minus_A)+1)):
+        B = set(B)
+        # Iterate over all B' ⊆ A
+        sum_term = 0.0
+        for B_prime in chain.from_iterable(combinations(A, r) for r in range(len(A)+1)):
+            B_prime = set(B_prime)
+            # Compute B ∪ B'
+            coalition = tuple(sorted(B.union(B_prime)))
+            if not coalition:  # Skip empty set (μ(∅) = 0)
+                continue
+            # Get μ(B ∪ B') from v (0 if coalition not in all_coalitions)
+            mu_val = v[coalition_to_index.get(coalition, 0)] if coalition in coalition_to_index else 0.0
+            # (-1)^{|A| - |B'|}
+            sign = (-1) ** (len(A) - len(B_prime))
+            sum_term += sign * mu_val
+        
+        # Compute weight [(m - |B| - |A|)! |B|!] / (m - |A| + 1)!
+        weight_numerator = factorial(m - len(B) - len(A)) * factorial(len(B))
+        weight_denominator = factorial(m - len(A) + 1)
+        weight = weight_numerator / weight_denominator
+        
+        I_S += weight * sum_term
+    
+    return I_S
+
+def banzhaf_interaction_index(A, all_coalitions, v, m):
+    """
+    Compute the Banzhaf interaction index I^B(A) for subset A.
+    
+    Args:
+        A (tuple): Target coalition (e.g., (0, 1)).
+        all_coalitions (list): List of all nonempty coalitions (as tuples).
+        v (np.array): Learned game parameters (μ values).
+        m (int): Total number of features.
+    
+    Returns:
+        float: Banzhaf interaction index for coalition A.
+    """
+    A = set(A)
+    M_minus_A = set(range(m)) - A
+    coalition_to_index = {coal: idx for idx, coal in enumerate(all_coalitions)}
+    I_B = 0.0
+    
+    # Iterate over all B ⊆ M \ A
+    for B in chain.from_iterable(combinations(M_minus_A, r) for r in range(len(M_minus_A)+1)):
+        B = set(B)
+        # Iterate over all B' ⊆ A
+        for B_prime in chain.from_iterable(combinations(A, r) for r in range(len(A)+1)):
+            B_prime = set(B_prime)
+            # Compute B ∪ B'
+            coalition = tuple(sorted(B.union(B_prime)))
+            if not coalition:  # Skip empty set
+                continue
+            # Get μ(B ∪ B') from v
+            mu_val = v[coalition_to_index.get(coalition, 0)] if coalition in coalition_to_index else 0.0
+            # (-1)^{|A| - |B'|}
+            sign = (-1) ** (len(A) - len(B_prime))
+            I_B += sign * mu_val
+    
+    # Normalize by 2^{m - |A|}
+    I_B /= 2 ** (m - len(A))
+    return I_B
 
 
 # =============================================================================

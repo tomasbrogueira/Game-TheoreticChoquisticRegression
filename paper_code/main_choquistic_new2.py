@@ -302,9 +302,10 @@ def diff(first, second):
 
 ''' Importing dataset '''
 # data_imp is the dataset to import (banknotes, transfusion, mammographic, raisin, rice, diabetes, skin, dados_covid_sbpo_atual)
-#data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
+# data_imp = list(['banknotes','transfusion','mammographic','raisin','rice','diabetes','skin','dados_covid_sbpo_atual'])
 # data_imp = list(['covid_gamma','covid_delta','covid_omicron','dados_covid_sbpo'])
-data_imp = list(['dados_covid_sbpo_atual'])
+# data_imp = list(['dados_covid_sbpo_atual'])
+data_imp = list(['transfusion'])
 
 attr = ('LR', 'CR', 'CR2add', 'MLMR', 'MLMR2add')
 # solver_lr = ('lbfgs', 'newton-cg', 'sag','saga')
