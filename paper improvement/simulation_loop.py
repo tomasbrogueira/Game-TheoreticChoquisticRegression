@@ -202,20 +202,20 @@ def simulation(
                 })
 
             if method == "mlm":
-                # For the MLM model, interaction terms are given directly by the product terms.
-                nAttr = X_train.shape[1]
-                coef_ch = coef[0]
-                interaction_coef = coef_ch[nAttr:]
-                interaction_matrix = np.zeros((nAttr, nAttr))
-                idx = 0
-                for i in range(nAttr):
-                    for j in range(i+1, nAttr):
-                        interaction_matrix[i, j] = interaction_coef[idx]
-                        interaction_matrix[j, i] = interaction_coef[idx]
-                        idx += 1
+                # For the MLM model
+                from regression_classes import compute_banzhaf_interaction_matrix
+                interaction_matrix = compute_banzhaf_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_coalitions)
                 interaction_matrices_dict.setdefault("mlm", []).append(interaction_matrix.copy())
 
+
             if method == "mlm_2add":
+                # For the MLM 2-add model
+                from regression_classes import compute_banzhaf_interaction_matrix
+                print(choquet_2add_coalitions)
+                interaction_matrix = compute_banzhaf_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_2add_coalitions, 2)
+                interaction_matrices_dict.setdefault("mlm_2add", []).append(interaction_matrix.copy())
+                
+                """
                 # For the MLM 2-add model, similarly extract interaction terms.
                 nAttr = X_train.shape[1]
                 coef_ch = coef[0]
@@ -228,6 +228,8 @@ def simulation(
                         interaction_matrix[j, i] = interaction_coef[idx]
                         idx += 1
                 interaction_matrices_dict.setdefault("mlm_2add", []).append(interaction_matrix.copy())
+                """
+    
 
 
         # Append the results from this simulation

@@ -439,6 +439,120 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
 
 
 # =============================================================================
+# Utility functions 
+# =============================================================================
+
+def compute_m(T, v, all_coalitions, k):
+    """
+    Compute the Möbius transform m(T) for coalition T.
+    For a singleton, m({i}) = v({i}).
+    For larger T (with |T| <= k), compute:
+         m(T) = v(T) - sum_{U ⊂ T, U ≠ ∅} m(U)
+    If T is not provided in all_coalitions, assume v(T)=0.
+    """
+    if len(T) == 1:
+        return v[all_coalitions.index(T)]
+    try:
+        v_T = v[all_coalitions.index(T)]
+    except ValueError:
+        v_T = 0.0
+    total = 0.0
+    for r in range(1, len(T)):
+        for U in itertools.combinations(T, r):
+            U = tuple(sorted(U))
+            total += compute_m(U, v, all_coalitions, k)
+    return v_T - total
+
+def compute_v_S(S, v, all_coalitions, k=None):
+    """
+    Compute the value v(S) for any coalition S.
+    If k is None (full model), then S is expected to be in all_coalitions.
+    For a k-additive model (e.g., k=2), reconstruct v(S) as:
+         v(S) = sum_{T ⊆ S, 1 ≤ |T| ≤ min(|S|, k)} m(T)
+    """
+    if len(S) == 0:
+        return 0.0
+    if (k is None) and (S in all_coalitions):
+        return v[all_coalitions.index(S)]
+    total = 0.0
+    max_r = min(len(S), k) if k is not None else len(S)
+    for r in range(1, max_r + 1):
+        for T in itertools.combinations(S, r):
+            T = tuple(sorted(T))
+            # Only add m(T) if T is in the provided list; otherwise assume zero.
+            if T in all_coalitions:
+                total += compute_m(T, v, all_coalitions, k)
+    return total
+
+
+def reconstruct_m(T, v, all_coalitions, k):
+    """
+    Recursively compute the Möbius coefficient m(T) for coalition T in a k-additive model.
+    For a singleton T, m(T) = v(T).
+    For T with |T| > 1 (and |T| ≤ k), we set:
+         m(T) = v(T) - sum_{U ⊂ T, U ≠ ∅} m(U)
+    If T is not explicitly in all_coalitions, we assume v(T)=0.
+    """
+    T = tuple(sorted(T))
+    if len(T) == 0:
+        return 0.0
+    if len(T) == 1:
+        try:
+            return v[all_coalitions.index(T)]
+        except ValueError:
+            return 0.0
+    # For coalitions of size > 1:
+    try:
+        vT = v[all_coalitions.index(T)]
+    except ValueError:
+        vT = 0.0
+    total = 0.0
+    # Sum over all proper, nonempty subsets of T.
+    for r in range(1, len(T)):
+        for U in itertools.combinations(T, r):
+            total += reconstruct_m(U, v, all_coalitions, k)
+    return vT - total
+
+def reconstruct_v_S(S, v, all_coalitions, k=None):
+    """
+    Reconstruct the value v(S) for any coalition S.
+    
+    - If S is in all_coalitions, return v(S) directly.
+    - Otherwise (i.e. in a k-additive model, if |S| > k) compute:
+          v(S) = sum_{T ⊆ S, 1 ≤ |T| ≤ min(|S|, k)} m(T)
+    where m(T) is computed by reconstruct_m.
+    
+    Parameters:
+      S : tuple
+          A sorted tuple representing the coalition.
+      v : 1D numpy array of learned coefficients.
+      all_coalitions : list
+          List of coalition tuples (each sorted). In a k-additive model this list
+          typically contains only coalitions of size ≤ k.
+      k : int or None
+          The additivity order. If None, the full model is assumed (so S must be found).
+    
+    Returns:
+      float: The reconstructed value v(S).
+    """
+    S = tuple(sorted(S))
+    # If S is in the learned list, use it.
+    if S in all_coalitions:
+        return v[all_coalitions.index(S)]
+    # Otherwise, if k is specified, reconstruct from all subsets T ⊆ S of size at most k.
+    if k is not None:
+        total = 0.0
+        max_r = min(len(S), k)
+        for r in range(1, max_r + 1):
+            for T in itertools.combinations(S, r):
+                T = tuple(sorted(T))
+                total += reconstruct_m(T, v, all_coalitions, k)
+        return total
+    # If k is None and S is missing, return 0.
+    return 0.0
+
+
+# =============================================================================
 # Explicit Interpretability Functions 
 # =============================================================================
 
@@ -498,61 +612,97 @@ def compute_banzhaf_indices(v, m, all_coalitions):
 # =============================================================================
 
 
-def compute_banzhaf_interaction_matrix(v, m, all_coalitions):
+def compute_banzhaf_interaction_matrix_iterative(v, m, all_coalitions, k=None):
     """
-    Compute the Banzhaf interaction matrix given the learned coefficient vector v,
-    the number of original features m, and the list of all nonempty coalitions.
-
-    The Banzhaf interaction index for a pair of features (i, j) is computed as:
-      I(i,j) = (1 / 2^(m-2)) * sum_{S ⊆ N\{i,j}} [v(S ∪ {i, j}) - v(S ∪ {i}) - v(S ∪ {j}) + v(S)]
-
+    Compute the Banzhaf interaction matrix for a model.
+    
+    For features i and j the index is defined as:
+      I(i,j) = (1 / 2^(m-2)) * sum_{S ⊆ N\\{i,j}} [v(S ∪ {i,j}) - v(S ∪ {i}) - v(S ∪ {j}) + v(S)]
+    
     Parameters:
-      - v: 1D array of learned coefficients (ordered as in all_coalitions)
-      - m: number of original features
-      - all_coalitions: list of tuples representing all nonempty coalitions
-        (as produced by the choquet_matrix transformation)
-
+      v: 1D numpy array of learned coefficients. For a k-additive model, v contains only 
+         the coefficients for coalitions of size ≤ k (with the empty coalition assumed to be 0).
+      m: number of original features.
+      all_coalitions: list of coalition tuples (each tuple is sorted). In a full model, this should
+         include every nonempty coalition; in a k-additive model, only those with |coalition| ≤ k.
+      k: the additivity order (e.g., 2 for 2-additive). If None, the full model is assumed.
+    
     Returns:
-      - A symmetric m x m numpy array containing the Banzhaf interaction indices.
+      A symmetric m x m numpy array with the Banzhaf interaction indices.
     """
-    import itertools
-
     interaction_matrix = np.zeros((m, m))
-    norm = 2 ** (m - 2)  # normalization: number of subsets S of N \ {i, j}
-    # Loop over each unique pair of features (i, j)
+    norm = 2 ** (m - 2)
+    features = list(range(m))
     for i in range(m):
         for j in range(i + 1, m):
             total = 0.0
-            # Compute over all subsets S of the remaining features
-            others = [k for k in range(m) if k not in (i, j)]
+            # Compute over all subsets S of N\{i,j}
+            others = [f for f in features if f not in (i, j)]
             for r in range(0, len(others) + 1):
                 for S in itertools.combinations(others, r):
                     S = tuple(sorted(S))
-                    # v(S): if S is empty, assume 0
-                    vS = 0.0 if len(S) == 0 else v[all_coalitions.index(S)]
-                    # v(S ∪ {i})
-                    Si = tuple(sorted(S + (i,)))
-                    try:
-                        vSi = v[all_coalitions.index(Si)]
-                    except ValueError:
-                        vSi = 0.0
-                    # v(S ∪ {j})
-                    Sj = tuple(sorted(S + (j,)))
-                    try:
-                        vSj = v[all_coalitions.index(Sj)]
-                    except ValueError:
-                        vSj = 0.0
-                    # v(S ∪ {i, j})
-                    Sij = tuple(sorted(S + (i, j)))
-                    try:
-                        vSij = v[all_coalitions.index(Sij)]
-                    except ValueError:
-                        vSij = 0.0
+                    vS   = compute_v_S(S, v, all_coalitions, k)
+                    Si   = tuple(sorted(S + (i,)))
+                    vSi  = compute_v_S(Si, v, all_coalitions, k)
+                    Sj   = tuple(sorted(S + (j,)))
+                    vSj  = compute_v_S(Sj, v, all_coalitions, k)
+                    Sij  = tuple(sorted(S + (i, j)))
+                    vSij = compute_v_S(Sij, v, all_coalitions, k)
                     total += vSij - vSi - vSj + vS
             interaction_matrix[i, j] = total / norm
             interaction_matrix[j, i] = total / norm
     return interaction_matrix
 
+
+def compute_banzhaf_interaction_matrix(v, m, all_coalitions, k=None):
+    """
+    Compute the Banzhaf interaction matrix given the learned coefficient vector v,
+    the number of original features m, and the list of coalitions.
+    
+    The Banzhaf interaction index for a pair of features (i, j) is computed as:
+      I(i,j) = (1 / 2^(m-2)) * Σ₍S ⊆ N\\{i,j}₎ [ v(S ∪ {i,j}) - v(S ∪ {i}) - v(S ∪ {j}) + v(S) ]
+    
+    Here v(S) is obtained as follows:
+      - For a full model (k is None), v(S) is looked up in all_coalitions.
+      - For a k-additive model (e.g. k = 2, 3, etc.), if S is not in all_coalitions,
+        it is reconstructed using the Möbius transform:
+            v(S) = ∑₍T ⊆ S, 1 ≤ |T| ≤ min(|S|, k)₎ m(T)
+    
+    Parameters:
+      v : 1D numpy array
+          Learned coefficients (ordered as in all_coalitions). For a k-additive model,
+          v[0] is the value for the empty coalition (assumed 0), followed by the coefficients
+          for coalitions of size 1, 2, …, up to k.
+      m : int
+          Number of original features.
+      all_coalitions : list
+          List of coalition tuples (each sorted). For a full model this should include every
+          nonempty coalition; for a k-additive model, typically only those with size ≤ k.
+      k : int or None
+          The additivity order (e.g., 2 for 2-additive). If None, the full model is assumed.
+    
+    Returns:
+      A symmetric m x m numpy array containing the Banzhaf interaction indices.
+    """
+    interaction_matrix = np.zeros((m, m))
+    norm = 2 ** (m - 2)  # normalization factor (number of subsets of N\{i,j})
+    features = list(range(m))
+    for i in range(m):
+        for j in range(i + 1, m):
+            total = 0.0
+            # Iterate over all subsets S ⊆ N\\{i,j}
+            others = [f for f in features if f not in (i, j)]
+            for r in range(0, len(others) + 1):
+                for S in itertools.combinations(others, r):
+                    S = tuple(sorted(S))
+                    vS   = reconstruct_v_S(S, v, all_coalitions, k)
+                    vSi  = reconstruct_v_S(tuple(sorted(S + (i,))), v, all_coalitions, k)
+                    vSj  = reconstruct_v_S(tuple(sorted(S + (j,))), v, all_coalitions, k)
+                    vSij = reconstruct_v_S(tuple(sorted(S + (i, j))), v, all_coalitions, k)
+                    total += (vSij - vSi - vSj + vS)
+            interaction_matrix[i, j] = total / norm
+            interaction_matrix[j, i] = total / norm
+    return interaction_matrix
 
 
 def compute_choquet_interaction_matrix(v, m, all_coalitions):
