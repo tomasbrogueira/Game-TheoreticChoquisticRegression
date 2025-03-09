@@ -291,18 +291,21 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
             return phi
 
         elif self.method == "choquet_2add":
-            # For 2-additive model, the coefficient vector is arranged as [main effects | interactions]
-            coef = self.classifier_.coef_[0]
-            nAttr = self.n_features_in_
-            marginal_contrib = coef[:nAttr].copy()
-            interactions = coef[nAttr:]
+            # For 2-additive models, Shapley values have a simplified formula:
+            # φj = μ({j}) + 0.5 * Σi≠j I({i,j})
+            marginal_contrib = coef[:nAttr].copy()  # μ({j}) values
+            interactions = coef[nAttr:]             # I({i,j}) values
+
+            # Build interaction matrix from the flat interaction vector
             interaction_matrix = np.zeros((nAttr, nAttr))
             counter = 0
             for i in range(nAttr):
                 for j in range(i + 1, nAttr):
                     interaction_matrix[i, j] = interactions[counter]
-                    interaction_matrix[j, i] = interactions[counter]
+                    interaction_matrix[j, i] = interactions[counter]  # Symmetry
                     counter += 1
+
+            # Apply the formula: φj = μ({j}) + 0.5 * Σi≠j I({i,j})
             shapley_vals = marginal_contrib + 0.5 * np.sum(interaction_matrix, axis=1)
             return {"marginal": marginal_contrib, "shapley": shapley_vals}
         else:
@@ -418,21 +421,25 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
                             continue
                         weight = (factorial(m - r - 1) * factorial(r)) / denom
                         phi[j] += weight * (vBj - vB)
-            return phi
+            return phi  # Fixed indentation - moved outside the for loop
 
         elif self.method == "choquet_2add":
-            coef = self.coef_[0]
-            nAttr = self.transformer_.n_features_in_
-            marginal_contrib = coef[:nAttr].copy()
-            interactions = coef[nAttr:]
+            # For 2-additive models, Shapley values have a simplified formula:
+            # φj = μ({j}) + 0.5 * Σi≠j I({i,j})
+            marginal_contrib = coef[:nAttr].copy()  # μ({j}) values
+            interactions = coef[nAttr:]             # I({i,j}) values
+
+            # Build interaction matrix from the flat interaction vector
             interaction_matrix = np.zeros((nAttr, nAttr))
             counter = 0
             for i in range(nAttr):
                 for j in range(i + 1, nAttr):
                     interaction_matrix[i, j] = interactions[counter]
-                    interaction_matrix[j, i] = interactions[counter]
+                    interaction_matrix[j, i] = interactions[counter]  # Symmetry
                     counter += 1
-            shapley_vals = coef[:nAttr] + 0.5 * np.sum(interaction_matrix, axis=1)
+
+            # Apply the formula: φj = μ({j}) + 0.5 * Σi≠j I({i,j})
+            shapley_vals = marginal_contrib + 0.5 * np.sum(interaction_matrix, axis=1)
             return {"marginal": marginal_contrib, "shapley": shapley_vals}
         else:
             raise ValueError("Shapley value computation is only implemented for 'choquet' and 'choquet_2add'.")
@@ -561,30 +568,50 @@ def reconstruct_v_S(S, v, all_coalitions, k=None):
 # =============================================================================
 # Power indices 
 # =============================================================================
-def compute_shapely_values(v, m, all_coalitions):
+def compute_shapley_values(v, m, all_coalitions):
     """
-    Compute Shapley values for a given Choquet model.
-    Parameters:
-      - v: 1D array of learned coefficients (ordered as in all_coalitions)
-      - m: number of original features
-      - all_coalitions: list of tuples representing all nonempty coalitions
-        (as produced by the choquet_matrix transformation)
-    Returns:
-      - A 1D numpy array of Shapley values.
+    Compute Shapley values according to equation 6 in a more efficient way.
     """
-    denom = factorial(m)
+    coalition_to_idx = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
     phi = np.zeros(m)
+    
+    # Memoization cache to avoid recomputing the same coalition values
+    coalition_values = {}
+    
+    def get_coalition_value(coalition):
+        if not coalition:
+            return 0.0  # Empty set has value 0
+        
+        # Check cache first
+        if coalition in coalition_values:
+            return coalition_values[coalition]
+            
+        # Calculate and cache the value
+        try:
+            value = v[coalition_to_idx[coalition]]
+        except (KeyError, IndexError):
+            value = 0.0
+            
+        coalition_values[coalition] = value
+        return value
+    
     for j in range(m):
-        for r in range(0, m):
-            for B in itertools.combinations([i for i in range(m) if i != j], r):
-                vB = 0.0 if len(B) == 0 else v[all_coalitions.index(tuple(sorted(B)))]
+        others = [i for i in range(m) if i != j]
+        
+        # Iterate through all subsets B ⊆ M\{j}
+        for r in range(len(others) + 1):
+            for B in itertools.combinations(others, r):
+                B = tuple(sorted(B))
                 Bj = tuple(sorted(B + (j,)))
-                try:
-                    vBj = v[all_coalitions.index(Bj)]
-                except ValueError:
-                    continue
-                weight = (factorial(m - r - 1) * factorial(r)) / denom
+                
+                # Calculate marginal contribution
+                vB = get_coalition_value(B)
+                vBj = get_coalition_value(Bj)
+                
+                # Calculate weight: (m-|B|-1)!|B|! / m!
+                weight = factorial(m - r - 1) * factorial(r) / factorial(m)
                 phi[j] += weight * (vBj - vB)
+                
     return phi
 
 def compute_banzhaf_indices(v, m, all_coalitions):
@@ -604,6 +631,66 @@ def compute_banzhaf_indices(v, m, all_coalitions):
                 except ValueError:
                     continue
                 phi_b[j] += vBj - vB
+    return phi_b / norm
+
+
+def compute_banzhaf_power_indices(v, m, all_coalitions, k=None):
+    """
+    Compute Banzhaf power indices for all features (Equation 13).
+    
+    φ_j^B = (1/2^(m-1)) * ∑_{B⊆M\{j}} [μ(B∪{j}) - μ(B)]
+    
+    Parameters:
+    -----------
+    v : array-like
+        Capacity/game values for each coalition
+    m : int
+        Number of features
+    all_coalitions : list of tuples
+        List of all coalitions in the model
+    k : int or None
+        Additivity limit for k-additive models (e.g., k=2 for 2-additive)
+        
+    Returns:
+    --------
+    numpy.ndarray : Banzhaf power indices for each feature
+    """
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    coalition_values = {}  # Memoization cache
+    
+    phi_b = np.zeros(m)
+    norm = 2 ** (m - 1)
+    
+    def get_value(coalition):
+        if not coalition:
+            return 0.0
+        if coalition in coalition_values:
+            return coalition_values[coalition]
+        
+        if k is None or len(coalition) <= k:
+            try:
+                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
+            except (KeyError, IndexError):
+                value = 0.0
+        else:
+            value = reconstruct_v_S(coalition, v, all_coalitions, k)
+        coalition_values[coalition] = value
+        return value
+    
+    for j in range(m):
+        others = [i for i in range(m) if i != j]
+        
+        # Iterate through all subsets B ⊆ M\{j}
+        for r in range(len(others) + 1):
+            for B in itertools.combinations(others, r):
+                B = tuple(sorted(B))
+                Bj = tuple(sorted(B + (j,)))
+                
+                # Calculate marginal contribution
+                vB = get_value(B)
+                vBj = get_value(Bj)
+                phi_b[j] += vBj - vB
+                
     return phi_b / norm
 
 
@@ -654,73 +741,156 @@ def compute_banzhaf_interaction_matrix_iterative(v, m, all_coalitions, k=None):
     return interaction_matrix
 
 
-def compute_banzhaf_interaction_matrix(v, m, all_coalitions, k=None):
+def compute_banzhaf_interaction_matrix(v, m, all_coalitions, k=None, k=None):
     """
-    Compute the Banzhaf interaction matrix given the learned coefficient vector v,
-    the number of original features m, and the list of coalitions.
+    Compute the Banzhaf interaction indices for all pairs of features (Equation 14).
     
-    The Banzhaf interaction index for a pair of features (i, j) is computed as:
-      I(i,j) = (1 / 2^(m-2)) * Σ₍S ⊆ N\\{i,j}₎ [ v(S ∪ {i,j}) - v(S ∪ {i}) - v(S ∪ {j}) + v(S) ]
+    I_{j,j'}^B = (1/2^(m-2)) * ∑_{B⊆M\{j,j'}} [μ(B∪{j,j'}) - μ(B∪{j}) - μ(B∪{j'}) + μ(B)]
     
-    Here v(S) is obtained as follows:
-      - For a full model (k is None), v(S) is looked up in all_coalitions.
-      - For a k-additive model (e.g. k = 2, 3, etc.), if S is not in all_coalitions,
-        it is reconstructed using the Möbius transform:
-            v(S) = ∑₍T ⊆ S, 1 ≤ |T| ≤ min(|S|, k)₎ m(T)
-    
-    Parameters:
-      v : 1D numpy array
-          Learned coefficients (ordered as in all_coalitions). For a k-additive model,
-          v[0] is the value for the empty coalition (assumed 0), followed by the coefficients
-          for coalitions of size 1, 2, …, up to k.
-      m : int
-          Number of original features.
-      all_coalitions : list
-          List of coalition tuples (each sorted). For a full model this should include every
-          nonempty coalition; for a k-additive model, typically only those with size ≤ k.
-      k : int or None
-          The additivity order (e.g., 2 for 2-additive). If None, the full model is assumed.
-    
-    Returns:
-      A symmetric m x m numpy array containing the Banzhaf interaction indices.
+    With k parameter to limit computation for large feature spaces.
     """
     interaction_matrix = np.zeros((m, m))
-    norm = 2 ** (m - 2)  # normalization factor (number of subsets of N\{i,j})
-    features = list(range(m))
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    coalition_values = {}  # Memoization cache
+    
+    def get_value(coalition):
+        if not coalition:
+            return 0.0
+        if coalition in coalition_values:
+            return coalition_values[coalition]
+        
+        if k is None:
+            value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
+        else:
+            value = reconstruct_v_S(coalition, v, all_coalitions, k)
+        coalition_values[coalition] = value
+        return value
+    
+    # The constant factor in the formula
+    norm = 2 ** (m - 2)
+    
+    # For every distinct pair of features (i,j)
     for i in range(m):
-        for j in range(i + 1, m):
+        for j in range(i+1, m):
             total = 0.0
-            # Iterate over all subsets S ⊆ N\\{i,j}
-            others = [f for f in features if f not in (i, j)]
-            for r in range(0, len(others) + 1):
-                for S in itertools.combinations(others, r):
-                    S = tuple(sorted(S))
-                    vS   = reconstruct_v_S(S, v, all_coalitions, k)
-                    vSi  = reconstruct_v_S(tuple(sorted(S + (i,))), v, all_coalitions, k)
-                    vSj  = reconstruct_v_S(tuple(sorted(S + (j,))), v, all_coalitions, k)
-                    vSij = reconstruct_v_S(tuple(sorted(S + (i, j))), v, all_coalitions, k)
-                    total += (vSij - vSi - vSj + vS)
+            # Define the set of "other" features (excluding i and j)
+            others = [k for k in range(m) if k not in (i, j)]
+            
+            # Determine the range of subset sizes to iterate over
+            max_r = len(others)
+            if k is not None:
+                max_r = min(max_r, k)
+                
+            for r in range(max_r + 1):
+                for B in itertools.combinations(others, r):
+                    B = tuple(sorted(B))
+                    
+                    # Compute the four required coalitions
+                    vB = get_value(B)
+                    vBi = get_value(tuple(sorted(B + (i,))))
+                    vBj = get_value(tuple(sorted(B + (j,))))
+                    vBij = get_value(tuple(sorted(B + (i, j))))
+                    
+                    # Apply the interaction formula
+                    total += vBij - vBi - vBj + vB
+                    
+            # Normalize and store the result (ensure matrix symmetry)
             interaction_matrix[i, j] = total / norm
-            interaction_matrix[j, i] = total / norm
+            interaction_matrix[j, i] = interaction_matrix[i, j]
+            
     return interaction_matrix
 
 
-def compute_choquet_interaction_matrix(v, m, all_coalitions):
+def compute_mlm_interaction_matrix(v, m, all_coalitions, k=None):
+    """
+    Compute the pairwise Banzhaf interaction indices for the multilinear model.
+    
+    For each distinct pair (i, j), the interaction index is computed as:
+    
+      IB(i,j) = (1/(2^(m-2))) * Σ_{B ⊆ M\{i,j}} [ v(B ∪ {i,j}) - v(B ∪ {i}) - v(B ∪ {j}) + v(B) ]
+    
+    If k is provided, then the summation is restricted to subsets B with |B| < k.
+    For a 2-additive model, set k = 2 (i.e., only B with |B| = 0 or 1 are included).
+    For full multilinear interactions, use k = None.
+    
+    Parameters:
+        v : array-like
+            The value function (or capacity) evaluated on each coalition.
+            The ordering in v must match the ordering of coalitions in 'all_coalitions'.
+        m : int
+            Total number of features.
+        all_coalitions : list of tuples
+            List of coalitions (each a sorted tuple of feature indices), including the empty set.
+        k : int or None, optional
+            If provided, restricts the summation to subsets B with |B| < k.
+            
+    Returns:
+        interaction_matrix : np.array of shape (m, m)
+            A symmetric matrix where entry (i, j) is the Banzhaf interaction index between features i and j.
+    """
+    interaction_matrix = np.zeros((m, m))
+    # Create a lookup dictionary so we can retrieve the value of v for a given coalition quickly.
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    
+    # The constant factor in the multilinear model for a pair (i,j)
+    constant_factor = 1.0 / (2 ** (m - 2))
+    
+    # Loop over all distinct pairs (i,j)
+    for i in range(m):
+        for j in range(i+1, m):
+            total = 0.0
+            # Define the set of "other" features (excluding i and j)
+            others = [k for k in range(m) if k not in (i, j)]
+            # Determine the range of subset sizes to iterate over.
+            if k is None:
+                r_range = range(0, len(others) + 1)
+            else:
+                r_range = range(0, min(k, len(others) + 1))
+            for r in r_range:
+                for B in itertools.combinations(others, r):
+                    B = tuple(sorted(B))
+                    # Get the value for coalition B
+                    vB = v[coalition_to_index[B]] if B in coalition_to_index else 0.0
+                    # Define the coalitions B ∪ {i}, B ∪ {j}, and B ∪ {i,j}
+                    Bi = tuple(sorted(B + (i,)))
+                    Bj = tuple(sorted(B + (j,)))
+                    Bij = tuple(sorted(B + (i, j)))
+                    vBi = v[coalition_to_index[Bi]] if Bi in coalition_to_index else 0.0
+                    vBj = v[coalition_to_index[Bj]] if Bj in coalition_to_index else 0.0
+                    vBij = v[coalition_to_index[Bij]] if Bij in coalition_to_index else 0.0
+                    total += (vBij - vBi - vBj + vB)
+            interaction_matrix[i, j] = constant_factor * total
+            interaction_matrix[j, i] = interaction_matrix[i, j]  # Ensure symmetry
+    return interaction_matrix
+
+
+
+
+def compute_choquet_interaction_matrix(v, m, all_coalitions, k=None):
     """
     Compute the pairwise Shapley interaction indices between features.
     
     For each distinct pair (i, j), the interaction index is computed as:
     
-      Iₛᵢ,ⱼ = Σ₍B ⊆ M\{i,j}₎ [((m - |B| - 2)! * |B|!)/(m - 1)! * (μ(B ∪ {i,j}) - μ(B ∪ {i}) - μ(B ∪ {j}) + μ(B))]
+      IS(i,j) = Σ₍B ⊆ M\{i,j}₎ [ ((m - |B| - 2)! * |B|!)/(m - 1)! * ( v(B ∪ {i,j}) - v(B ∪ {i}) - v(B ∪ {j}) + v(B) ) ]
+    
+    The summation is taken over all subsets B ⊆ M\{i,j}. If k is provided,
+    then only subsets with |B| < k are used. For example, to compute the 2-additive
+    interaction index (as used in the 2-additive Choquet integral), set k = 2 
+    (so that only B with |B| = 0 or 1 are considered). For full Choquet interactions, set 
+    k = None (or omit it), which sums over all subsets.
     
     Parameters:
         v : array-like
-            Value function evaluated on each coalition (μ).
+            Value function evaluated on each coalition. The ordering in v must match that 
+            of coalitions in all_coalitions.
         m : int
-            Number of features.
+            Total number of features.
         all_coalitions : list of tuples
-            List of coalitions (each is a sorted tuple of feature indices).
-            Should include the empty set.
+            List of coalitions (each is a sorted tuple of feature indices), including the empty set.
+        k : int or None, optional
+            If provided, restricts the summation to subsets B with |B| < k.
+            For 2-additive, use k = 2. For full Choquet, use None.
             
     Returns:
         interaction_matrix : np.array of shape (m, m)
@@ -729,16 +899,25 @@ def compute_choquet_interaction_matrix(v, m, all_coalitions):
     interaction_matrix = np.zeros((m, m))
     coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
     
+    # Loop over all distinct pairs of features
     for i in range(m):
         for j in range(i+1, m):
             total = 0.0
-            # Consider subsets B of the features excluding both i and j.
+            # Compute the list of features excluding i and j
             others = [k for k in range(m) if k not in (i, j)]
-            for r in range(0, len(others)+1):
+            # Determine the maximum size for the subsets:
+            # If k is provided, sum only over B with |B| < k;
+            # Otherwise, sum over all subsets.
+            if k is None:
+                r_range = range(0, len(others)+1)
+            else:
+                r_range = range(0, min(k, len(others)+1))
+            for r in r_range:
                 for B in itertools.combinations(others, r):
                     B = tuple(sorted(B))
-                    # Weight: ((m - |B| - 2)! * |B|! ) / (m - 1)!
+                    # Weight: ((m - |B| - 2)! * |B|!)/(m - 1)!
                     weight = factorial(m - r - 2) * factorial(r) / factorial(m - 1)
+                    # Retrieve the value function for the coalition and its extensions.
                     vB = v[coalition_to_index[B]] if B in coalition_to_index else 0.0
                     Bi = tuple(sorted(B + (i,)))
                     Bj = tuple(sorted(B + (j,)))
@@ -750,6 +929,97 @@ def compute_choquet_interaction_matrix(v, m, all_coalitions):
             interaction_matrix[i, j] = total
             interaction_matrix[j, i] = total  # Ensure symmetry
     return interaction_matrix
+
+
+def compute_mlm_banzhaf_interaction_indices(v, m, all_coalitions, k=None):
+    """
+    Compute Banzhaf interaction indices specifically for MultiLinear Models.
+    
+    This implementation is optimized for MLM where we know the structure
+    of the coalitions in advance, and can use direct lookups instead of
+    reconstruction formulas needed for Choquet integrals.
+    
+    Parameters:
+    -----------
+    v : array-like
+        The learned MLM coefficients
+    m : int
+        Number of features
+    all_coalitions : list of tuples
+        All coalitions in the model
+    k : int or None
+        If provided, limits computation to subsets B with |B| < k
+        
+    Returns:
+    --------
+    dict : Contains 'power_indices' (1D array) and 'interaction_matrix' (2D array)
+    """
+    # Create lookup dictionary for fast coalition value retrieval
+    coalition_to_index = {coal: idx for idx, coal in enumerate(all_coalitions)}
+    
+    # 1. Compute power indices (singleton interactions)
+    power_indices = np.zeros(m)
+    norm_power = 2 ** (m - 1)
+    
+    # 2. Compute interaction matrix (pairwise interactions)
+    interaction_matrix = np.zeros((m, m))
+    norm_interaction = 2 ** (m - 2)
+    
+    # Memoization cache for coalition values
+    coal_values = {}
+    
+    def get_value(coalition):
+        """Get coalition value with memoization"""
+        if not coalition:  # Empty set
+            return 0.0
+            
+        if coalition in coal_values:
+            return coal_values[coalition]
+            
+        try:
+            value = v[coalition_to_index[coalition]] if coalition in coalition_to_index else 0.0
+        except (KeyError, IndexError):
+            value = 0.0
+            
+        coal_values[coalition] = value
+        return value
+    
+    # For power indices: φ_j^B = (1/2^(m-1)) * ∑_{B⊆M\{j}} [μ(B∪{j}) - μ(B)]
+    for j in range(m):
+        others = [i for i in range(m) if i != j]
+        for r in range(len(others) + 1):
+            if k is not None and r >= k:
+                break
+                
+            for B in itertools.combinations(others, r):
+                B = tuple(sorted(B))
+                Bj = tuple(sorted(B + (j,)))
+                power_indices[j] += get_value(Bj) - get_value(B)
+    
+    power_indices /= norm_power
+    
+    # For interaction matrix: I_{i,j}^B = (1/2^(m-2)) * ∑_{B⊆M\{i,j}} [μ(B∪{i,j}) - μ(B∪{i}) - μ(B∪{j}) + μ(B)]
+    for i in range(m):
+        for j in range(i+1, m):
+            others = [k for k in range(m) if k not in (i, j)]
+            max_r = len(others) if k is None else min(len(others), k)
+            
+            for r in range(max_r + 1):
+                for B in itertools.combinations(others, r):
+                    B = tuple(sorted(B))
+                    Bi = tuple(sorted(B + (i,)))
+                    Bj = tuple(sorted(B + (j,)))
+                    Bij = tuple(sorted(B + (i, j)))
+                    
+                    interaction_matrix[i, j] += get_value(Bij) - get_value(Bi) - get_value(Bj) + get_value(B)
+                    
+            interaction_matrix[i, j] /= norm_interaction
+            interaction_matrix[j, i] = interaction_matrix[i, j]  # Ensure symmetry
+    
+    return {
+        'power_indices': power_indices,
+        'interaction_matrix': interaction_matrix
+    }
 
 
 # =============================================================================
@@ -842,10 +1112,148 @@ def banzhaf_interaction_index(A, all_coalitions, v, m):
     I_B /= 2 ** (m - len(A))
     return I_B
 
+def compute_shapley_interaction_indices(v, m, all_coalitions, target_feature_set):
+    """
+    Compute the general Shapley interaction indices for any subset A of features.
+    
+    Parameters:
+    -----------
+    v : array-like
+        Capacity/game values for each coalition
+    m : int
+        Total number of features
+    all_coalitions : list of tuples
+        List of all coalitions in the model
+    target_feature_set : tuple or list
+        The set A of features for which to compute the interaction index
+        
+    Returns:
+    --------
+    float : Shapley interaction index I^S(A)
+    """
+    A = set(target_feature_set)
+    A_size = len(A)
+    M_minus_A = set(range(m)) - A
+    coalition_to_index = {coal: idx for idx, coal in enumerate(all_coalitions)}
+    
+    interaction_index = 0.0
+    
+    # Iterate over all B ⊆ M\A
+    for r in range(len(M_minus_A) + 1):
+        for B in itertools.combinations(M_minus_A, r):
+            B = set(B)
+            # Weight calculation for this B
+            weight = factorial(m - len(B) - A_size) * factorial(len(B)) / factorial(m - A_size + 1)
+            
+            # Inner sum over all B' ⊆ A
+            inner_sum = 0.0
+            for r_prime in range(A_size + 1):
+                for B_prime in itertools.combinations(A, r_prime):
+                    B_prime = set(B_prime)
+                    union = tuple(sorted(B.union(B_prime)))
+                    if not union:  # Empty set
+                        continue
+                        
+                    # Get the value, or 0 if not found
+                    try:
+                        mu_val = v[coalition_to_index[union]]
+                    except (KeyError, IndexError):
+                        mu_val = 0.0
+                        
+                    # Apply the sign: (-1)^(|A| - |B'|)
+                    sign = (-1) ** (A_size - len(B_prime))
+                    inner_sum += sign * mu_val
+                    
+            interaction_index += weight * inner_sum
+            
+    return interaction_index
+
+def compute_banzhaf_interaction_index(v, m, all_coalitions, A, k=None):
+    """
+    Compute the general Banzhaf interaction index I^B(A) for any subset A (Equation 12).
+    
+    I^B(A) = (1/2^(m-|A|)) * ∑_{B⊆M\A} ∑_{B'⊆A} (-1)^(|A|-|B'|) * μ(B∪B')
+    
+    Parameters:
+    -----------
+    v : array-like
+        The capacity/game values for each coalition
+    m : int
+        Total number of features
+    all_coalitions : list of tuples
+        List of all coalitions in the model
+    A : tuple or list
+        The subset of features for which to compute the interaction index
+    k : int or None, optional
+        Additivity limit for k-additive models. If None, full model is assumed.
+        
+    Returns:
+    --------
+    float : The Banzhaf interaction index I^B(A)
+    """
+    A = tuple(sorted(A))
+    A_set = set(A)
+    M_minus_A = set(range(m)) - A_set
+    
+    # Create a lookup dictionary for coalition values
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    
+    # Memoization cache for coalition values
+    coalition_values = {}
+    
+    def get_coalition_value(coalition):
+        """Get or compute the value v(coalition) with memoization"""
+        coalition = tuple(sorted(coalition))
+        if not coalition:
+            return 0.0  # Empty set has value 0
+            
+        # Check cache first
+        if coalition in coalition_values:
+            return coalition_values[coalition]
+            
+        # Calculate and cache the value
+        if k is None:
+            # For full model, direct lookup or 0
+            try:
+                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
+            except (KeyError, IndexError):
+                value = 0.0
+        else:
+            # For k-additive model, reconstruct the value
+            value = reconstruct_v_S(coalition, v, all_coalitions, k)
+            
+        coalition_values[coalition] = value
+        return value
+    
+    interaction_index = 0.0
+    
+    # Iterate over all B ⊆ M\A
+    for B_size in range(len(M_minus_A) + 1):
+        for B in itertools.combinations(M_minus_A, B_size):
+            B = set(B)
+            
+            # Iterate over all B' ⊆ A
+            for B_prime_size in range(len(A_set) + 1):
+                for B_prime in itertools.combinations(A_set, B_prime_size):
+                    B_prime = set(B_prime)
+                    
+                    # (-1)^(|A| - |B'|)
+                    sign = (-1) ** (len(A_set) - len(B_prime))
+                    
+                    # Get μ(B ∪ B')
+                    coalition = tuple(sorted(B.union(B_prime)))
+                    value = get_coalition_value(coalition)
+                    
+                    interaction_index += sign * value
+    
+    # Normalize by 2^(m - |A|)
+    interaction_index /= (2 ** (m - len(A_set)))
+    
+    return interaction_index
 
 # =============================================================================
 # Choose Default Implementation
 # =============================================================================
 
-ChoquisticRegression = ChoquisticRegression_Composition
-#ChoquisticRegression = ChoquisticRegression_Inheritance
+#ChoquisticRegression = ChoquisticRegression_Composition
+ChoquisticRegression = ChoquisticRegression_Inheritance

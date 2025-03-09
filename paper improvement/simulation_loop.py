@@ -95,15 +95,30 @@ def simulation(
     # Compute the 2-additive coalitions only once.
     nAttr = X.shape[1]
     coalitions_2add = (
-        [()] + [(i,) for i in range(nAttr)] +
-        [tuple(sorted(pair)) for pair in itertools.combinations(range(nAttr), 2)]
-    )
+    [(i,) for i in range(nAttr)] +
+    [tuple(sorted(pair)) for pair in itertools.combinations(range(nAttr), 2)]
+)
+
 
     # Containers for results
     all_sim_results = {"LR": [], "choquet": [], "choquet_2add": [], "mlm": [], "mlm_2add": []}
     interaction_matrices_dict = {"choquet": [], "choquet_2add": []}
     choquet_coalitions = coalitions_full  # Reuse the precomputed coalitions
     choquet_2add_coalitions = coalitions_2add  # Reuse the precomputed 2-add coalitions
+
+    # Initialize the interaction matrices dictionary for all methods
+    interaction_matrices_dict = {
+        "choquet": [], 
+        "choquet_2add": [], 
+        "mlm": [], 
+        "mlm_2add": []
+    }
+
+    # Initialize dictionaries to store Banzhaf power indices
+    banzhaf_indices = {
+        "mlm": [],
+        "mlm_2add": []
+    }
 
     # Containers for plotting values
     shapley_full = []
@@ -159,6 +174,19 @@ def simulation(
             n_iter = model.classifier_.n_iter_ if hasattr(model, "classifier_") else model.n_iter_
             sim_results[method] = {"train_acc": train_acc, "test_acc": test_acc,
                                 "coef": coef, "n_iter": n_iter}
+            
+
+
+            # Fix the coalition printing loop by adding a safety check
+            for coalition in choquet_coalitions:
+                try:
+                    idx = choquet_coalitions.index(coalition)
+                    if idx < len(coef[0]):
+                        print(f"{method} Coalition: {coalition}, coefficient: {coef[0][idx]}")
+                except IndexError:
+                    print(f"{method} Coalition: {coalition} - Index out of bounds")
+
+
 
             if method == "choquet":
                 # Use the precomputed 'choquet_coalitions' directly instead of recomputing.
@@ -171,7 +199,7 @@ def simulation(
                     marginal_full.append(np.atleast_1d(marginal_vals))
                     
                     from regression_classes import compute_choquet_interaction_matrix
-                    interaction_matrix = compute_choquet_interaction_matrix(coef[0], nAttr, choquet_coalitions)
+                    interaction_matrix = compute_choquet_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_coalitions)
                     interaction_matrices_dict.setdefault("choquet", []).append(interaction_matrix.copy())
                 except Exception as e:
                     print(f"Could not compute full choquet values: {e}")
@@ -188,7 +216,7 @@ def simulation(
                 
                 from regression_classes import compute_choquet_interaction_matrix
                 interaction_matrix = compute_choquet_interaction_matrix(
-                    np.insert(coef[0], 0, 0.0), nAttr, choquet_2add_coalitions
+                    np.insert(coef[0], 0, 0.0), nAttr, choquet_2add_coalitions, 2
                 )
                 interaction_matrices_dict.setdefault("choquet_2add", []).append(interaction_matrix.copy())
                 
@@ -203,16 +231,34 @@ def simulation(
 
             if method == "mlm":
                 # For the MLM model
-                from regression_classes import compute_banzhaf_interaction_matrix
-                interaction_matrix = compute_banzhaf_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_coalitions)
+                from regression_classes import compute_mlm_interaction_matrix
+                interaction_matrix = compute_mlm_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_coalitions)
                 interaction_matrices_dict.setdefault("mlm", []).append(interaction_matrix.copy())
+
+                # For the full MLM model
+                from regression_classes import compute_mlm_interaction_matrix, compute_banzhaf_power_indices
+                
+                # Get model coefficients (v values)
+                v = np.insert(coef[0], 0, 0.0)  # Insert 0 for empty set
+                
+                # Compute interaction matrix using Banzhaf formula
+                interaction_matrix = compute_mlm_interaction_matrix(v, nAttr, choquet_coalitions)
+                interaction_matrices_dict["mlm"].append(interaction_matrix.copy())
+                
+                # Compute Banzhaf power indices
+                power_indices = compute_banzhaf_power_indices(v, nAttr, choquet_coalitions)
+                banzhaf_indices["mlm"].append(power_indices)
+                
+                # Store in simulation results
+                sim_results[method]["banzhaf_indices"] = power_indices
+                sim_results[method]["interaction_matrix"] = interaction_matrix
 
 
             if method == "mlm_2add":
                 # For the MLM 2-add model
-                from regression_classes import compute_banzhaf_interaction_matrix
+                from regression_classes import compute_mlm_interaction_matrix
                 print(choquet_2add_coalitions)
-                interaction_matrix = compute_banzhaf_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_2add_coalitions, 2)
+                interaction_matrix = compute_mlm_interaction_matrix(np.insert(coef[0], 0, 0.0), nAttr, choquet_2add_coalitions,2)
                 interaction_matrices_dict.setdefault("mlm_2add", []).append(interaction_matrix.copy())
                 
                 """
@@ -229,7 +275,23 @@ def simulation(
                         idx += 1
                 interaction_matrices_dict.setdefault("mlm_2add", []).append(interaction_matrix.copy())
                 """
-    
+                # For the 2-additive MLM model
+                from regression_classes import compute_mlm_interaction_matrix, compute_banzhaf_power_indices
+                
+                # Get model coefficients (v values)
+                v = np.insert(coef[0], 0, 0.0)  # Insert 0 for empty set
+                
+                # Compute interaction matrix using Banzhaf formula for 2-additive model
+                interaction_matrix = compute_mlm_interaction_matrix(v, nAttr, choquet_2add_coalitions, 2)
+                interaction_matrices_dict["mlm_2add"].append(interaction_matrix.copy())
+                
+                # Compute Banzhaf power indices for 2-additive model
+                power_indices = compute_banzhaf_power_indices(v, nAttr, choquet_2add_coalitions, 2)
+                banzhaf_indices["mlm_2add"].append(power_indices)
+                
+                # Store in simulation results
+                sim_results[method]["banzhaf_indices"] = power_indices
+                sim_results[method]["interaction_matrix"] = interaction_matrix
 
 
         # Append the results from this simulation
@@ -280,7 +342,115 @@ def simulation(
     plot_log_odds_hist(log_odds_decision, log_odds_bins, plot_folder)
     plot_log_odds_vs_prob(log_odds_decision, all_probs, plot_folder)
 
+    # In the plotting section:
+    # New function to plot Banzhaf power indices
+    def plot_banzhaf_indices(feature_names, banzhaf_indices, plot_folder, method):
+        """
+        Plot Banzhaf power indices for features.
+        
+        Parameters:
+        -----------
+        feature_names : list
+            Names of the features
+        banzhaf_indices : list of numpy.ndarray
+            List of Banzhaf indices for each simulation
+        plot_folder : str
+            Directory to save the plot
+        method : str
+            Method name for title and filename
+        """
+        plt.figure(figsize=(10, 6))
+        
+        # Average over simulations
+        avg_indices = np.mean(np.vstack(banzhaf_indices), axis=0)
+        
+        # Sort indices by magnitude for better visualization
+        sorted_idx = np.argsort(avg_indices)
+        sorted_features = [feature_names[i] for i in sorted_idx]
+        sorted_indices = avg_indices[sorted_idx]
+        
+        plt.barh(range(len(sorted_features)), sorted_indices, align='center')
+        plt.yticks(range(len(sorted_features)), sorted_features)
+        plt.xlabel('Banzhaf Power Index')
+        plt.title(f'Banzhaf Power Indices - {method}')
+        plt.grid(axis='x', linestyle='--', alpha=0.7)
+        plt.tight_layout()
+        
+        # Save figure
+        plt.savefig(os.path.join(plot_folder, f'banzhaf_indices_{method}.png'), dpi=300, bbox_inches='tight')
+        plt.close()
 
+    # After the other plotting calls
+    if "mlm" in methods and banzhaf_indices["mlm"]:
+        plot_banzhaf_indices(feature_names, banzhaf_indices["mlm"], plot_folder, method="mlm")
+        
+    if "mlm_2add" in methods and banzhaf_indices["mlm_2add"]:
+        plot_banzhaf_indices(feature_names, banzhaf_indices["mlm_2add"], plot_folder, method="mlm_2add")
+
+
+    def plot_interaction_comparison(feature_names, choquet_interaction, mlm_interaction, plot_folder, method_suffix="2add"):
+        """
+        Compare interaction matrices between Choquet and MLM models.
+        
+        Parameters:
+        -----------
+        feature_names : list
+            Names of the features
+        choquet_interaction : list of numpy.ndarray
+            List of interaction matrices from Choquet model
+        mlm_interaction : list of numpy.ndarray
+            List of interaction matrices from MLM model
+        plot_folder : str
+            Directory to save the plot
+        method_suffix : str
+            Suffix for method identification (e.g., "2add" for 2-additive models)
+        """
+        # Average over simulations
+        avg_choquet = np.mean(np.array(choquet_interaction), axis=0)
+        avg_mlm = np.mean(np.array(mlm_interaction), axis=0)
+        
+        # Create a figure with two subplots
+        fig, axes = plt.subplots(1, 2, figsize=(15, 7))
+        
+        # Plot Choquet interaction
+        im1 = axes[0].imshow(avg_choquet, cmap='coolwarm', vmin=-1, vmax=1)
+        axes[0].set_title(f'Choquet {method_suffix} Interaction')
+        axes[0].set_xticks(np.arange(len(feature_names)))
+        axes[0].set_yticks(np.arange(len(feature_names)))
+        axes[0].set_xticklabels(feature_names, rotation=90)
+        axes[0].set_yticklabels(feature_names)
+        
+        # Plot MLM interaction
+        im2 = axes[1].imshow(avg_mlm, cmap='coolwarm', vmin=-1, vmax=1)
+        axes[1].set_title(f'MLM {method_suffix} Interaction')
+        axes[1].set_xticks(np.arange(len(feature_names)))
+        axes[1].set_yticks(np.arange(len(feature_names)))
+        axes[1].set_xticklabels(feature_names, rotation=90)
+        axes[1].set_yticklabels(feature_names)
+        
+        # Add colorbar
+        fig.colorbar(im1, ax=axes.ravel().tolist(), shrink=0.7)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(plot_folder, f'interaction_comparison_{method_suffix}.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+
+    # Add to simulation_loop.py plotting section:
+    if "choquet" in methods and "mlm" in methods:
+        if interaction_matrices_dict["choquet"] and interaction_matrices_dict["mlm"]:
+            plot_interaction_comparison(feature_names, 
+                                    interaction_matrices_dict["choquet"], 
+                                    interaction_matrices_dict["mlm"], 
+                                    plot_folder, 
+                                    "full")
+
+    if "choquet_2add" in methods and "mlm_2add" in methods:
+        if interaction_matrices_dict["choquet_2add"] and interaction_matrices_dict["mlm_2add"]:
+            plot_interaction_comparison(feature_names, 
+                                    interaction_matrices_dict["choquet_2add"], 
+                                    interaction_matrices_dict["mlm_2add"], 
+                                    plot_folder, 
+                                    "2add")
 
     # We'll implement three methods for the full Choquet model.
     nAttr = X_train.shape[1]
@@ -307,7 +477,7 @@ def simulation(
             pairwise_vals = []
             for k in range(nAttr):
                 if k != j:
-                    # Compute the Shapley interaction index for the pair (j,k)
+                    # Compute the Shapley interaction index for the pair (j, k)
                     idx_val = shapley_interaction_index((j, k), choquet_coalitions, avg_v_full, m=nAttr)
                     pairwise_vals.append(idx_val)
             overall_method3[j] = np.mean(pairwise_vals)
