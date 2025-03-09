@@ -1,6 +1,11 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+def ensure_folder(folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
 def get_feature_names(X):
     """Extract feature names from DataFrame or create default names."""
@@ -115,12 +120,6 @@ def weighted_full_interaction_effect(v, all_coalitions, m, index_type='shapley')
 import itertools
 import numpy as np
 
-import itertools
-import numpy as np
-
-import itertools
-import numpy as np
-
 def total_interaction_contribution(interaction_matrix, all_coalitions, m):
     """
     Compute normalized interaction contribution per feature, adjusted for combinatorial scaling.
@@ -190,3 +189,62 @@ def interaction_shapley_ratio(shapley_values, interaction_matrix, all_coalitions
     total_contribution = tsc + tic
     isr = np.divide(tic, total_contribution, where=(total_contribution != 0))
     return isr
+
+
+
+
+def overall_interaction_index(interaction_matrix):
+    """
+    Compute the overall interaction effect for each feature from the pairwise interaction matrix.
+    
+    For feature j, the overall interaction is defined as 0.5 times the sum of the interactions 
+    between feature j and every other feature.
+    
+    Parameters:
+        interaction_matrix (np.ndarray): An m x m symmetric matrix of pairwise interaction indices.
+    
+    Returns:
+        np.ndarray: A 1D array of length m with the overall interaction index for each feature.
+    """
+    overall = 0.5 * np.sum(interaction_matrix, axis=1)
+    return overall
+
+
+
+def overall_interaction_index_abs(interaction_matrix):
+    """
+    Compute the overall interaction magnitude for each feature, ignoring sign.
+    
+    For feature j, this is defined as 0.5 times the sum of the absolute interaction 
+    indices with every other feature.
+    
+    Parameters:
+        interaction_matrix (np.ndarray): An m x m symmetric matrix of pairwise interaction indices.
+    
+    Returns:
+        np.ndarray: A 1D array of length m with the overall interaction magnitude for each feature.
+    """
+    overall = 0.5 * np.sum(np.abs(interaction_matrix), axis=1)
+    return overall
+
+
+
+
+def overall_interaction_from_shapley(shapley_vals, marginal_vals):
+    """
+    Compute the overall interaction effect for each feature from the Shapley and marginal values.
+    
+    In a 2-additive Choquet model:
+      φ_S(j) = marginal_j + (1/2) * Σ_{k≠j} I_S(j,k)
+    
+    Therefore, the overall interaction effect is:
+      overall_interaction(j) = φ_S(j) - marginal_j
+    
+    Parameters:
+        shapley_vals (np.ndarray): 1D array of Shapley values for each feature.
+        marginal_vals (np.ndarray): 1D array of marginal (singleton) contributions.
+    
+    Returns:
+        np.ndarray: A 1D array of overall interaction effects for each feature.
+    """
+    return shapley_vals - marginal_vals

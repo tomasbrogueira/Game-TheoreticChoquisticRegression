@@ -10,13 +10,9 @@ from sklearn.preprocessing import StandardScaler
 # necessary for shapley values
 os.environ["SCIPY_ARRAY_API"] = "1"
 
-def ensure_folder(folder):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
 from regression_classes import ChoquisticRegression
 import mod_GenFuzzyRegression as modGF
-from simulation_helper_functions import get_feature_names
+from simulation_helper_functions import get_feature_names, ensure_folder
 
 
 def simulation(
@@ -71,7 +67,7 @@ def simulation(
     Returns:
       - final_results: dictionary with accuracy scores, coefficients, and other relevant data
     """
-    # Update logistic parameters if provided
+        # Update logistic parameters if provided
     if solver_lr is not None:
         baseline_logistic_params["solver"] = solver_lr
         choq_logistic_params["solver"] = solver_lr
@@ -85,13 +81,29 @@ def simulation(
     if not os.path.exists(plot_folder):
         os.makedirs(plot_folder)
 
-    # 1. Load and normalize the data
+    # Load and (optionally) scale the entire dataset
     X, y = modGF.func_read_data(data_imp)
+    if scale_data:
+        X_co = StandardScaler().fit_transform(X)
+    else:
+        X_co = X
 
-    # Create dictionaries to collect results across simulations
+    # Compute the coalitions only once for the full Choquet model.
+    from regression_classes import choquet_matrix
+    _, coalitions_full = choquet_matrix(X_co)
+
+    # Compute the 2-additive coalitions only once.
+    nAttr = X.shape[1]
+    coalitions_2add = (
+        [()] + [(i,) for i in range(nAttr)] +
+        [tuple(sorted(pair)) for pair in itertools.combinations(range(nAttr), 2)]
+    )
+
+    # Containers for results
     all_sim_results = {"LR": [], "choquet": [], "choquet_2add": [], "mlm": [], "mlm_2add": []}
-    # Isolated interaction matrices dictionary
     interaction_matrices_dict = {"choquet": [], "choquet_2add": []}
+    choquet_coalitions = coalitions_full  # Reuse the precomputed coalitions
+    choquet_2add_coalitions = coalitions_2add  # Reuse the precomputed 2-add coalitions
 
     # Containers for plotting values
     shapley_full = []
@@ -149,50 +161,35 @@ def simulation(
                                 "coef": coef, "n_iter": n_iter}
 
             if method == "choquet":
+                # Use the precomputed 'choquet_coalitions' directly instead of recomputing.
                 try:
-                    # Compute full Choquet Shapley values for marginal contributions
                     shapley_vals = model.compute_shapley_values()
                     sim_results[method]["shapley"] = shapley_vals
                     shapley_full.append(np.atleast_1d(shapley_vals))
-                    
-                    nAttr = X_train.shape[1]
                     marginal_vals = coef[0][:nAttr]
                     sim_results[method]["marginal"] = marginal_vals
                     marginal_full.append(np.atleast_1d(marginal_vals))
                     
-                    # For the full Choquet model, obtain the list of all coalitions.
-                    from regression_classes import choquet_matrix, compute_choquet_interaction_matrix
-                    m = nAttr
-                    if scale_data:
-                        X_co = StandardScaler().fit_transform(X_train)
-                    else:
-                        X_co = X_train
-                    # choquet_matrix is assumed to return (transformed_matrix, all_coalitions)
-                    _, all_coalitions = choquet_matrix(X_co)
-                    v = coef[0]
-                    # Use the Shapley-based equation to compute pairwise interactions.
-                    interaction_matrix = compute_choquet_interaction_matrix(v, m, all_coalitions)
+                    from regression_classes import compute_choquet_interaction_matrix
+                    interaction_matrix = compute_choquet_interaction_matrix(coef[0], nAttr, choquet_coalitions)
                     interaction_matrices_dict.setdefault("choquet", []).append(interaction_matrix.copy())
                 except Exception as e:
                     print(f"Could not compute full choquet values: {e}")
 
             if method == "choquet_2add":
                 try:
-                    # For the 2-additive model, compute both marginal and Shapley values
-                    shapley_dict = model.compute_shapley_values()  # expecting dict with keys "shapley" and "marginal"
+                    shapley_dict = model.compute_shapley_values()
                     sim_results[method]["shapley"] = shapley_dict["shapley"]
                     sim_results[method]["marginal"] = shapley_dict["marginal"]
                     shapley_2add.append(np.atleast_1d(shapley_dict["shapley"]))
                     marginal_2add.append(np.atleast_1d(shapley_dict["marginal"]))
                 except Exception as e:
                     print(f"Could not compute values for choquet 2-add: {e}")
-                # For 2-additive, build the restricted list of coalitions: only those with size 0, 1, and 2.
-                nAttr = X_train.shape[1]
-                # The empty set, all singletons, and all pairs.
-                all_coalitions_2add = [()] + [(i,) for i in range(nAttr)] + [tuple(sorted(pair)) for pair in itertools.combinations(range(nAttr), 2)]
-                v = np.insert(coef[0], 0, 0.0)  # v now is of length 1 + nAttr + nAttr*(nAttr-1)/2
+                
                 from regression_classes import compute_choquet_interaction_matrix
-                interaction_matrix = compute_choquet_interaction_matrix(v, nAttr, all_coalitions_2add)
+                interaction_matrix = compute_choquet_interaction_matrix(
+                    np.insert(coef[0], 0, 0.0), nAttr, choquet_2add_coalitions
+                )
                 interaction_matrices_dict.setdefault("choquet_2add", []).append(interaction_matrix.copy())
                 
                 log_odds_test = model.decision_function(X_test)
@@ -249,7 +246,8 @@ def simulation(
         plot_log_odds_vs_prob,
         plot_shapley_vs_interaction,
         plot_test_accuracy,
-        plot_decision_boundary
+        plot_decision_boundary,
+        plot_overall_interaction
     )
     from os.path import join
 
@@ -280,6 +278,53 @@ def simulation(
     plot_log_odds_hist(log_odds_decision, log_odds_bins, plot_folder)
     plot_log_odds_vs_prob(log_odds_decision, all_probs, plot_folder)
 
+
+
+    # We'll implement three methods for the full Choquet model.
+    nAttr = X_train.shape[1]
+    if shapley_full and marginal_full and "choquet" in interaction_matrices_dict and len(interaction_matrices_dict["choquet"]) > 0:
+        # Average over simulations for the full Choquet method:
+        avg_shapley_full = np.mean(np.vstack(shapley_full), axis=0)
+        avg_marginal_full = np.mean(np.vstack(marginal_full), axis=0)
+        avg_interaction_matrix_full = np.mean(np.array(interaction_matrices_dict["choquet"]), axis=0)
+        
+        # Method 1: From the interaction matrix
+        overall_method1 = 0.5 * np.sum(avg_interaction_matrix_full, axis=1)
+        # Method 2: Difference between Shapley and marginal values
+        overall_method2 = avg_shapley_full - avg_marginal_full
+        # Method 3: Average of pairwise interaction indices computed with shapley_interaction_index
+        from regression_classes import shapley_interaction_index
+        nAttr = X_train.shape[1]
+        overall_method3 = np.zeros(nAttr)
+        # Compute the average game parameter vector (v) from the full Choquet model over simulations.
+        # Here we assume that for each simulation in the full choquet branch, sim["coef"][0] contains v.
+        avg_v_full = np.mean(np.vstack([sim["coef"][0] for sim in all_sim_results["choquet"] if "coef" in sim]), axis=0)
+
+        # Use the coalitions from the full Choquet model (saved as choquet_coalitions)
+        for j in range(nAttr):
+            pairwise_vals = []
+            for k in range(nAttr):
+                if k != j:
+                    # Compute the Shapley interaction index for the pair (j,k)
+                    idx_val = shapley_interaction_index((j, k), choquet_coalitions, avg_v_full, m=nAttr)
+                    pairwise_vals.append(idx_val)
+            overall_method3[j] = np.mean(pairwise_vals)
+
+        
+        # Plot the overall interaction indices for all three methods:
+        feature_names = get_feature_names(X)
+        overall_dict = {
+    "Matrix Method": overall_method1,
+    "Shapley - Marginal": overall_method2,
+    "Average Pairwise": overall_method3
+}
+        plot_overall_interaction(feature_names, overall_dict, "Overall Interaction Comparison", plot_folder)
+
+
+
+
+
+    """
     # Plot the Shapley values vs. interaction effect for the full Choquet model
     from simulation_helper_functions import weighted_full_interaction_effect
     m = X_train.shape[1]
@@ -291,6 +336,7 @@ def simulation(
     indices = weighted_pairwise_interaction_effect(avg_coef_2add, interaction_matrix, m)
     plot_shapley_vs_interaction(feature_names, shapley_2add, indices, plot_folder, method="choquet_2add")
 
+    
     # Plot ISR for both choquet and choquet_2add
 
     # Get the coalitions for choquet
@@ -325,7 +371,7 @@ def simulation(
     isr_full = interaction_shapley_ratio(avg_shapley_full, interaction_matrices_dict["choquet"], choquet_coalitions, m=nAttr)
     isr_2add = interaction_shapley_ratio(avg_shapley_2add, interaction_matrices_dict["choquet_2add"], choquet_2add_coalitions, m=nAttr)
     plot_shapley_vs_interaction(feature_names, isr_full, isr_2add, plot_folder, method="ISR")
-
+    """
     
 
     model_names = sorted(all_sim_results.keys())

@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from os.path import join
-from simulation_helper_functions import plot_horizontal_bar 
+from simulation_helper_functions import plot_horizontal_bar, ensure_folder
 
 def plot_shapley_full(feature_names, all_shapley_full, plot_folder):
     if not all_shapley_full:
@@ -236,3 +236,51 @@ def plot_decision_boundary(X, y, model, filename):
     plt.savefig(filename)
     plt.close()
     print("Saved decision boundary plot to:", filename)
+
+
+
+def plot_overall_interaction(feature_names, overall_data_dict, title, plot_folder):
+    """
+    Plot overall interaction indices for each feature as grouped bars.
+    
+    For each feature, the function displays one bar per method (each with a distinct color).
+    
+    Parameters:
+      feature_names (list of str): List of feature names.
+      overall_data_dict (dict): Dictionary mapping method names (str) to overall interaction 
+                                index arrays (1D numpy arrays of length equal to number of features).
+      title (str): Title of the plot.
+      plot_folder (str): Directory to save the plot.
+    """
+    n_features = len(feature_names)
+    method_names = list(overall_data_dict.keys())
+    n_methods = len(method_names)
+    
+    # X locations for groups of bars
+    ind = np.arange(n_features)
+    width = 0.8 / n_methods  # Total group width is 0.8
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Define a color cycle (or use a colormap)
+    colors = plt.cm.Set1(np.linspace(0, 1, n_methods))
+    
+    for idx, method in enumerate(method_names):
+        overall = overall_data_dict[method]
+        # Position each bar within its group
+        ax.bar(ind + idx * width, overall, width, label=method, color=colors[idx])
+    
+    ax.set_ylabel("Overall Interaction Index")
+    ax.set_title(title)
+    # Center x-ticks in the group
+    ax.set_xticks(ind + width * (n_methods - 1) / 2)
+    ax.set_xticklabels(feature_names, rotation=45, ha="right")
+    ax.legend()
+    ax.grid(axis="y", linestyle="--", alpha=0.7)
+    
+    plt.tight_layout()
+    ensure_folder(plot_folder)
+    output_path = join(plot_folder, title.replace(" ", "_") + ".png")
+    plt.savefig(output_path)
+    plt.close()
+    print("Saved overall interaction plot to", output_path)
