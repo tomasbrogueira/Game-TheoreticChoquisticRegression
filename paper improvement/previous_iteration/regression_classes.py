@@ -1708,8 +1708,6 @@ def compute_model_interactions(v, m, all_coalitions, model_type="mlm", k=None):
                 
                 interaction_matrix[j, i] = interaction_matrix[i, j]  # Ensure symmetry
     
-    # Remove all scaling factors - return raw mathematical values
-    
     return {
         'power_indices': power_indices,
         'interaction_matrix': interaction_matrix

@@ -13,13 +13,6 @@ def get_feature_names(X):
         return X.columns.tolist()
     else:
         return [f"F{i}" for i in range(X.shape[1])]
-    
-def extract_k_value(method_name):
-    import re
-    match = re.search(r'_(\d+)add$', method_name)
-    if match:
-        return int(match.group(1))
-    return None
 
 def plot_horizontal_bar(names, values, std=None, title="", xlabel="", filename="", color="steelblue"):
     """
@@ -310,18 +303,13 @@ def verify_shapley_decomposition(feature_idx, v, all_coalitions, m):
     int_sum = 0.5 * np.sum(int_matrix[feature_idx, :])
     
     # Verify the relationship
-    print(f"Shapley: {shapley:.6f}")
-    print(f"Singleton: {singleton:.6f}")
-    print(f"0.5 * Sum Interactions: {int_sum:.6f}")
-    print(f"Singleton + Interactions: {(singleton + int_sum):.6f}")
-    print(f"Difference: {shapley - (singleton + int_sum):.6f}")
-    
-    # Calculate potential scale factor
-    if abs(int_sum) > 1e-10:  # Avoid division by zero
-        scale_factor = (shapley - singleton) / int_sum
-        print(f"Potential scale factor: {scale_factor:.6f}")
-    
-    return singleton, int_sum, shapley
+    print(f"Shapley: {shapley}")
+    print(f"Singleton: {singleton}")
+    print(f"0.5 * Sum Interactions: {int_sum}")
+    print(f"Singleton + Interactions: {singleton + int_sum}")
+    print(f"Difference: {shapley - (singleton + int_sum)}")
+
+
 
 
 
@@ -348,42 +336,3 @@ def verify_matrix_shapley_equivalence(v, m, all_coalitions):
     print("Matrix vs Shapley max difference:", np.max(diff))
     print("Matrix vs Shapley average difference:", np.mean(diff))
     return diff
-
-
-def verify_scaling(shapley_indices, interaction_matrix):
-    """
-    Verify scaling consistency between Shapley indices and interaction matrix.
-    The relationship φj = v({j}) + 0.5 * Σ_{k≠j} I({j,k}) should hold.
-    
-    Parameters:
-        shapley_indices (np.ndarray): Shapley values for each feature
-        interaction_matrix (np.ndarray): Interaction matrix
-        
-    Returns:
-        tuple: (scale_factor, absolute_differences)
-            where scale_factor is a suggested correction if needed
-    """
-    n_features = len(shapley_indices)
-    
-    # Method 1: From interaction matrix
-    overall_int_from_matrix = 0.5 * np.sum(interaction_matrix, axis=1)
-    
-    # Estimate if scale correction is needed
-    avg_shapley = np.mean(np.abs(shapley_indices))
-    avg_interaction = np.mean(np.abs(overall_int_from_matrix))
-    
-    # If the average interaction effect is significantly smaller than expected
-    correction = avg_shapley / (avg_interaction * 2) if avg_interaction > 0 else 1
-    
-    # Compute differences to verify mathematical relationship
-    differences = np.abs(shapley_indices - overall_int_from_matrix)
-    
-    # Check if scaling is likely needed
-    needs_scaling = correction > 1.5 or correction < 0.67
-    
-    print(f"Average Shapley magnitude: {avg_shapley:.4f}")
-    print(f"Average 0.5*sum(interactions) magnitude: {avg_interaction:.4f}")
-    print(f"Estimated scale correction factor: {correction:.4f}")
-    print(f"Need scaling correction: {needs_scaling}")
-    
-    return correction if needs_scaling else 1, differences

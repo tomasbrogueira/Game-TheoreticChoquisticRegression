@@ -7,6 +7,7 @@ import pickle
 import itertools
 from sklearn.preprocessing import MinMaxScaler
 
+
 # necessary for shapley values
 os.environ["SCIPY_ARRAY_API"] = "1"
 
@@ -22,7 +23,7 @@ from regression_classes import (
     compute_model_interactions
 )
 import mod_GenFuzzyRegression as modGF
-from simulation_helper_functions import get_feature_names, ensure_folder, compare_transformations
+from simulation_helper_functions import get_feature_names, ensure_folder, compare_transformations, extract_k_value
 
 
 def simulation(
@@ -101,40 +102,26 @@ def simulation(
     from regression_classes import choquet_matrix
     _, coalitions_full = choquet_matrix(X_co)
 
-    # Compute the 2-additive coalitions only once.
+    # Initialize dictionary to store coalitions for different k values
+    k_add_coalitions = {}
     nAttr = X.shape[1]
-    coalitions_2add = (
-        [(i,) for i in range(nAttr)] +
-        [tuple(sorted(pair)) for pair in itertools.combinations(range(nAttr), 2)]
-    )
-
-    # Containers for results
-    all_sim_results = {"LR": [], "choquet": [], "choquet_2add": [], "mlm": [], "mlm_2add": []}
     
-    # Initialize the interaction matrices dictionary for all methods
-    interaction_matrices_dict = {
-        "choquet": [], 
-        "choquet_2add": [], 
-        "mlm": [], 
-        "mlm_2add": []
+    # Create a more structured data storage approach
+    all_sim_results = {}
+    for method in ["LR"] + methods:
+        all_sim_results[method] = []
+    
+    # Structured storage for interpretability measures
+    interpretability_data = {
+        method: {
+            "power_indices": [],        # Shapley for choquet, Banzhaf for MLM
+            "marginal_values": [],      # Direct singleton contributions
+            "interaction_matrix": [],   # Pairwise interaction matrices
+            "log_odds": [],             # For visualization
+            "predicted_probs": []       # For visualization
+        } for method in methods
     }
-
-    # Initialize dictionaries to store power indices
-    power_indices_dict = {
-        "choquet": {"shapley": []}, 
-        "choquet_2add": {"shapley": []},
-        "mlm": {"banzhaf": []},
-        "mlm_2add": {"banzhaf": []}
-    }
-
-    # Containers for plotting values
-    shapley_full = []
-    shapley_2add = []
-    marginal_full = []
-    marginal_2add = []
-    log_odds_decision = []
-    all_probs = []
-
+    
     for sim in range(n_simulations):
         sim_results = {}
         print(f"\nSimulation {sim+1}/{n_simulations}")
@@ -165,24 +152,16 @@ def simulation(
         ))
         sim_results["LR"] = {"train_acc": baseline_train_acc, "test_acc": baseline_test_acc,
                              "coef": lr_baseline.coef_, "n_iter": lr_baseline.n_iter_}
-
-        # Store transformed matrices for verification
-        transformed_matrices = {}
         
         # Process each method
         for method in methods:
             print("Processing method:", method)
-            k_add = 2 if method.endswith("_2add") else None
+            k_add = extract_k_value(method)
             choq_params = choq_logistic_params.copy()
             choq_params["random_state"] = sim_seed
             
             # For verification/debugging purposes
             if sim == 0 and len(X_train) > 0:
-                transformer = ChoquetTransformer(
-                    method=method, 
-                    k_add=k_add,
-                    scale_data=scale_data
-                )
                 X_sample = X_train[:min(3, len(X_train))]
                 compare_transformations(X_sample)
             
@@ -199,105 +178,95 @@ def simulation(
             coef = model.coef_
             n_iter = model.n_iter_
             
-            print(f"  {method} Test Acc: {test_acc:.4f}")
+            print(f"  {method} Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}")
             
-            # Create a deep copy of the results to ensure no reference sharing
-            import copy
-            sim_results[method] = copy.deepcopy({
+            # Store basic performance metrics
+            sim_results[method] = {
                 "train_acc": train_acc, 
                 "test_acc": test_acc,
-                "coef": coef, 
+                "coef": coef.copy(), 
                 "n_iter": n_iter
-            })
-        
-
+            }
+            
             # Get the appropriate coalitions based on method
-            if method.endswith("_2add"):
-                all_coalitions = coalitions_2add
-                k_value = 2
+            if k_add is not None:
+                # Create coalitions for this k value if not already computed
+                if k_add not in k_add_coalitions:
+                    k_add_coalitions[k_add] = []
+                    # Add individual attributes
+                    k_add_coalitions[k_add].extend([(i,) for i in range(nAttr)])
+                    # Add all combinations up to size k
+                    for size in range(2, k_add + 1):
+                        k_add_coalitions[k_add].extend([tuple(sorted(combo)) for combo in itertools.combinations(range(nAttr), size)])
+                
+                all_coalitions = k_add_coalitions[k_add]
             else:
                 all_coalitions = coalitions_full
-                k_value = None
 
             # Extract capacity values from the model (with 0 for empty set)
-            v = np.insert(coef[0], 0, 0.0) 
-
-            # Compute interpretability measures based on method type
+            # For LogisticRegression, coef_ is a 2D array (n_classes-1, n_features)
+            v = np.insert(coef[0], 0, 0.0)
+            
+            # Compute interpretability measures based on method type - ENSURE CONSISTENCY WITH ORIGINAL VERSION
             if method.startswith("choquet"):
-                # Compute Shapley values and store them
-                shapley_values = compute_shapley_values(v, nAttr, all_coalitions, k=k_value)
-                power_indices_dict[method]["shapley"].append(shapley_values)
-                sim_results[method]["shapley"] = shapley_values
-                
-                # Store Shapley values for plotting
-                if method == "choquet":
-                    shapley_full.append(shapley_values)
-                    # Extract the  singleton coalition values
-                    marginal_values = []
-                    for i in range(nAttr):
-                        # Find the exact coalition in the coalition list
-                        try:
-                            singleton_idx = all_coalitions.index((i,))
-                            # Use direct v value (+1 for empty set)
-                            marginal_values.append(v[singleton_idx+1])
-                        except ValueError:
-                            # Fallback (shouldn't happen)
-                            marginal_values.append(coef[0][i])
-                    marginal_full.append(marginal_values)
-                    from simulation_helper_functions import verify_shapley_decomposition
-                    for feature_idx in range(min(5, nAttr)):  # Check first 5 features
-                        verify_shapley_decomposition(feature_idx, v, all_coalitions, nAttr)
-                    sim_results[method]["marginal"] = marginal_values
-                elif method == "choquet_2add":
-                    # Compute Shapley values using model's method which returns a dictionary
+                # First try to use model's optimized calculation method for any Choquet variant
+                try:
                     shapley_result = model.compute_shapley_values()
                     
                     if isinstance(shapley_result, dict) and "shapley" in shapley_result:
-                        # Store the actual Shapley values from the dictionary
+                        # Use model's optimized calculation if available
                         shapley_values = shapley_result["shapley"]
                         marginal_values = shapley_result["marginal"]
                     else:
-                        # Fall back to using the global function if needed
-                        shapley_values = compute_shapley_values(v, nAttr, all_coalitions, k=k_value)
-                        marginal_values = coef[0][:nAttr]
-
-                    # Store values appropriately
-                    shapley_2add.append(shapley_values)
-                    marginal_2add.append(marginal_values)
-                    sim_results[method]["shapley"] = shapley_values
-                    sim_results[method]["marginal"] = marginal_values
-                    
-                    # For visualization purposes, we can also compute normalized/absolute values
-                    # This helps in understanding feature importance regardless of direction
-                    abs_shapley = np.abs(shapley_values)
-                    sim_results[method]["abs_shapley"] = abs_shapley
-                    
-                # Compute interaction matrix
-                interaction_matrix = compute_choquet_interaction_matrix(v, nAttr, all_coalitions, k=k_value)
-                interaction_matrices_dict[method].append(interaction_matrix)
-                sim_results[method]["interaction_matrix"] = interaction_matrix
+                        # If result is not in expected format, use general calculation
+                        raise AttributeError("Invalid format from compute_shapley_values()")
+                except (AttributeError, NotImplementedError):
+                    # Fall back to direct computation if optimization fails or not implemented
+                    shapley_values = compute_shapley_values(v, nAttr, all_coalitions, k=k_add)
+                    # Extract the singleton coalition values consistently
+                    marginal_values = np.zeros(nAttr)
+                    for i in range(nAttr):
+                        try:
+                            singleton_idx = all_coalitions.index((i,))
+                            # Use direct v value (+1 for empty set)
+                            marginal_values[i] = v[singleton_idx+1]
+                        except ValueError:
+                            # Fallback (shouldn't happen)
+                            marginal_values[i] = coef[0][i]
+                
+                # Store the values in the interpretability data structure
+                interpretability_data[method]["power_indices"].append(shapley_values)
+                interpretability_data[method]["marginal_values"].append(marginal_values)
+                
+                # Compute interaction matrix - USE DIRECT COMPUTATION FOR CONSISTENCY
+                interaction_matrix = compute_choquet_interaction_matrix(v, nAttr, all_coalitions, k=k_add)
+                interpretability_data[method]["interaction_matrix"].append(interaction_matrix)
                 
             elif method.startswith("mlm"):
-                # Compute Banzhaf power indices
-                banzhaf_values = compute_banzhaf_power_indices(v, nAttr, all_coalitions, k=k_value)
-                power_indices_dict[method]["banzhaf"].append(banzhaf_values)
-                sim_results[method]["banzhaf"] = banzhaf_values
+                # Compute Banzhaf power indices - USE DIRECT COMPUTATION FOR CONSISTENCY
+                banzhaf_values = compute_banzhaf_power_indices(v, nAttr, all_coalitions, k=k_add)
+                interpretability_data[method]["power_indices"].append(banzhaf_values)
                 
-                # Compute Banzhaf interaction matrix
-                interaction_matrix = compute_banzhaf_interaction_matrix(v, nAttr, all_coalitions, k=k_value)
-                interaction_matrices_dict[method].append(interaction_matrix)
-                sim_results[method]["interaction_matrix"] = interaction_matrix
+                # Extract marginal/singleton values 
+                marginal_values = np.zeros(nAttr)
+                for i in range(nAttr):
+                    try:
+                        singleton_idx = all_coalitions.index((i,))
+                        marginal_values[i] = v[singleton_idx+1]
+                    except ValueError:
+                        marginal_values[i] = coef[0][i]
+                        
+                interpretability_data[method]["marginal_values"].append(marginal_values)
                 
-            # For choquet_2add, also collect log odds and probabilities
-            if method == "choquet_2add":
-                log_odds_test = model.decision_function(X_test)
-                probs_test = model.predict_proba(X_test)
-                log_odds_decision.append(log_odds_test)
-                all_probs.append(probs_test)
-                sim_results[method].update({
-                    "log_odds_test": log_odds_test,
-                    "predicted_probabilities_test": probs_test,
-                })
+                # Compute Banzhaf interaction matrix - USE DIRECT COMPUTATION FOR CONSISTENCY
+                interaction_matrix = compute_banzhaf_interaction_matrix(v, nAttr, all_coalitions, k=k_add)
+                interpretability_data[method]["interaction_matrix"].append(interaction_matrix)
+            
+            # Collect log odds and probabilities for visualization
+            log_odds_test = model.decision_function(X_test)
+            probs_test = model.predict_proba(X_test)
+            interpretability_data[method]["log_odds"].append(log_odds_test)
+            interpretability_data[method]["predicted_probs"].append(probs_test)
 
         # Append the results from this simulation
         for key, result in sim_results.items():
@@ -317,209 +286,233 @@ def simulation(
         plot_test_accuracy,
         plot_decision_boundary,
         plot_overall_interaction,
-        plot_interaction_comparison
+        plot_interaction_comparison,
     )
     from os.path import join
+    from simulation_helper_functions import (
+        overall_interaction_index,
+        overall_interaction_index_abs,
+        overall_interaction_from_shapley
+    )
 
     feature_names = get_feature_names(X)
 
-    # Plot Shapley values for full Choquet model
-    if shapley_full:
-        plot_shapley_full(feature_names, shapley_full, plot_folder)
-
-    # Plot coefficients for full Choquet model
-    if "choquet" in methods and all_sim_results["choquet"]:
-        coef_values = [sim["coef"] for sim in all_sim_results["choquet"] if "coef" in sim]
-        if coef_values:
-            print("Plotting coefficients for full Choquet model")
-            avg_coef_full = np.mean(np.vstack(coef_values), axis=0)
-            plot_coef_full(X, avg_coef_full, plot_folder)
-
-    # Plot coefficients for 2-additive Choquet model
-    if "choquet_2add" in methods and all_sim_results["choquet_2add"]:
-        print("Plotting coefficients for 2-additive Choquet model")
-        coef_values = [sim["coef"] for sim in all_sim_results["choquet_2add"] if "coef" in sim]
-        if coef_values:
-            avg_coef_2add = np.mean(np.vstack(coef_values), axis=0)
-            plot_coef_2add(feature_names, avg_coef_2add, plot_folder)
-
-    # Plot Shapley and marginal values for 2-additive model
-    if shapley_2add:
-        plot_shapley_2add(feature_names, shapley_2add, plot_folder)
-    if marginal_2add:
-        plot_marginal_2add(feature_names, marginal_2add, plot_folder)
-
-    # Plot interaction matrices for all models
+    # Plotting section - prepare data first then plot
+    
+    # 1. Extract aggregated interpretability data for plotting
+    plot_data = {}
+    
     for method in methods:
-        if method in interaction_matrices_dict and interaction_matrices_dict[method]:
-            plot_interaction_matrix(X, feature_names, interaction_matrices_dict[method], plot_folder, method=method)
-
-    # Plot log-odds and probabilities
-    if log_odds_decision:
-        plot_log_odds_hist(log_odds_decision, log_odds_bins, plot_folder)
-        plot_log_odds_vs_prob(log_odds_decision, all_probs, plot_folder)
-
-    # Plot Banzhaf power indices 
-    def plot_banzhaf_indices(feature_names, banzhaf_indices, plot_folder, method):
-        """
-        Plot Banzhaf power indices for features.
+        plot_data[method] = {}
         
-        Parameters:
-        -----------
-        feature_names : list
-            Names of the features
-        banzhaf_indices : list of numpy.ndarray
-            List of Banzhaf indices for each simulation
-        plot_folder : str
-            Directory to save the plot
-        method : str
-            Method name for title and filename
-        """
-        plt.figure(figsize=(10, 6))
+        # Average power indices (Shapley for choquet, Banzhaf for MLM)
+        if interpretability_data[method]["power_indices"]:
+            power_indices_array = np.vstack(interpretability_data[method]["power_indices"])
+            plot_data[method]["power_indices_avg"] = np.mean(power_indices_array, axis=0)
+            plot_data[method]["power_indices_std"] = np.std(power_indices_array, axis=0)
         
-        # Average over simulations
-        avg_indices = np.mean(np.vstack(banzhaf_indices), axis=0)
+        # Average marginal values
+        if interpretability_data[method]["marginal_values"]:
+            marginal_array = np.vstack(interpretability_data[method]["marginal_values"])
+            plot_data[method]["marginal_avg"] = np.mean(marginal_array, axis=0)
+            plot_data[method]["marginal_std"] = np.std(marginal_array, axis=0)
         
-        # Sort indices by magnitude for better visualization
-        sorted_idx = np.argsort(avg_indices)
-        sorted_features = [feature_names[i] for i in sorted_idx]
-        sorted_indices = avg_indices[sorted_idx]
+        # Average interaction matrix
+        if interpretability_data[method]["interaction_matrix"]:
+            interaction_array = np.array(interpretability_data[method]["interaction_matrix"])
+            plot_data[method]["interaction_matrix_avg"] = np.mean(interaction_array, axis=0)
         
-        plt.barh(range(len(sorted_features)), sorted_indices, align='center')
-        plt.yticks(range(len(sorted_features)), sorted_features)
-        plt.xlabel('Banzhaf Power Index')
-        plt.title(f'Banzhaf Power Indices - {method}')
-        plt.grid(axis='x', linestyle='--', alpha=0.7)
-        plt.tight_layout()
-        
-        # Save figure
-        plt.savefig(os.path.join(plot_folder, f'banzhaf_indices_{method}.png'), dpi=300, bbox_inches='tight')
-        plt.close()
-
-    # Plot Banzhaf power indices for MLM models
-    for method in ["mlm", "mlm_2add"]:
-        if method in methods and method in power_indices_dict and "banzhaf" in power_indices_dict[method]:
-            indices = power_indices_dict[method]["banzhaf"]
-            if indices:
-                plot_banzhaf_indices(feature_names, indices, plot_folder, method=method)
-
+        # Model coefficients
+        if method in all_sim_results and all_sim_results[method]:
+            coef_values = [sim["coef"] for sim in all_sim_results[method] if "coef" in sim]
+            if coef_values:
+                plot_data[method]["coef_avg"] = np.mean(np.vstack(coef_values), axis=0)
+    
+    # 2. Now use the aggregated data for plotting
+    
+    # Plot Shapley values for Choquet methods
+    for method in [m for m in methods if m.startswith("choquet")]:
+        if method in plot_data and "power_indices_avg" in plot_data[method]:
+            if method == "choquet":
+                plot_shapley_full(
+                    feature_names, 
+                    interpretability_data[method]["power_indices"], 
+                    plot_folder
+                )
+            elif method == "choquet_2add":
+                plot_shapley_2add(
+                    feature_names, 
+                    interpretability_data[method]["power_indices"], 
+                    plot_folder
+                )
+                
+                # Also plot marginal values for 2-additive model
+                if "marginal_values" in interpretability_data[method]:
+                    plot_marginal_2add(
+                        feature_names, 
+                        interpretability_data[method]["marginal_values"], 
+                        plot_folder
+                    )
+    
+    # Plot Banzhaf indices for MLM methods
+    for method in [m for m in methods if m.startswith("mlm")]:
+        if "power_indices_avg" in plot_data.get(method, {}):
+            from plotting_functions import plot_banzhaf_indices
+            plot_banzhaf_indices(
+                feature_names, 
+                interpretability_data[method]["power_indices"], 
+                plot_folder, 
+                method
+            )
+    
+    # Plot coefficients
+    for method in methods:
+        if "coef_avg" not in plot_data.get(method, {}):
+            continue
+            
+        if method == "choquet":
+            plot_coef_full(X, plot_data[method]["coef_avg"], plot_folder, model_type="choquet")
+        elif method == "choquet_2add":
+            plot_coef_2add(feature_names, plot_data[method]["coef_avg"], plot_folder, model_type="choquet")
+        elif method == "mlm":
+            plot_coef_full(X, plot_data[method]["coef_avg"], plot_folder, model_type="mlm")
+        elif method == "mlm_2add":
+            plot_coef_2add(feature_names, plot_data[method]["coef_avg"], plot_folder, model_type="mlm")
+    
+    # Plot interaction matrices for all methods
+    for method in methods:
+        if method in plot_data and "interaction_matrix_avg" in plot_data[method]:
+                        plot_interaction_matrix(
+                X, 
+                feature_names, 
+                interpretability_data[method]["interaction_matrix"], 
+                plot_folder, 
+                method=method
+            )
+    
+    # Generate side-by-side comparison plots - one for full models, one for 2-add models
+    # Compare full models: Choquet vs MLM
+    if "choquet" in methods and "mlm" in methods:
+        if (interpretability_data["choquet"]["interaction_matrix"] and 
+            interpretability_data["mlm"]["interaction_matrix"]):
+            print("  Generating side-by-side comparison for full models")
+            plot_interaction_comparison(
+                feature_names, 
+                interpretability_data["choquet"]["interaction_matrix"], 
+                interpretability_data["mlm"]["interaction_matrix"], 
+                plot_folder, 
+                "full"
+            )
+    
+    # Compare 2-add models: Choquet vs MLM
+    if "choquet_2add" in methods and "mlm_2add" in methods:
+        if (interpretability_data["choquet_2add"]["interaction_matrix"] and 
+            interpretability_data["mlm_2add"]["interaction_matrix"]):
+            print("  Generating side-by-side comparison for 2-add models")
+            plot_interaction_comparison(
+                feature_names, 
+                interpretability_data["choquet_2add"]["interaction_matrix"], 
+                interpretability_data["mlm_2add"]["interaction_matrix"], 
+                plot_folder, 
+                "2add"
+            )
+    
+    # Plot log-odds and probabilities using the choquet_2add method directly from interpretability_data
+    if "choquet_2add" in methods and interpretability_data["choquet_2add"]["log_odds"]:
+        plot_log_odds_hist(
+            interpretability_data["choquet_2add"]["log_odds"], 
+            log_odds_bins, 
+            plot_folder
+        )
+        plot_log_odds_vs_prob(
+            interpretability_data["choquet_2add"]["log_odds"], 
+            interpretability_data["choquet_2add"]["predicted_probs"], 
+            plot_folder
+        )
+    
     # Compare interaction matrices between Choquet and MLM models
     if "choquet" in methods and "mlm" in methods:
-        if interaction_matrices_dict["choquet"] and interaction_matrices_dict["mlm"]:
-            plot_interaction_comparison(feature_names, 
-                                      interaction_matrices_dict["choquet"], 
-                                      interaction_matrices_dict["mlm"], 
-                                      plot_folder, 
-                                      "full")
-
+        if (interpretability_data["choquet"]["interaction_matrix"] and 
+            interpretability_data["mlm"]["interaction_matrix"]):
+            plot_interaction_comparison(
+                feature_names, 
+                interpretability_data["choquet"]["interaction_matrix"], 
+                interpretability_data["mlm"]["interaction_matrix"], 
+                plot_folder, 
+                "full"
+            )
+    
     if "choquet_2add" in methods and "mlm_2add" in methods:
-        if interaction_matrices_dict["choquet_2add"] and interaction_matrices_dict["mlm_2add"]:
-            plot_interaction_comparison(feature_names, 
-                                      interaction_matrices_dict["choquet_2add"], 
-                                      interaction_matrices_dict["mlm_2add"], 
-                                      plot_folder, 
-                                      "2add")
-
-    # Compare interaction methods for the full Choquet model
-    if shapley_full and marginal_full and "choquet" in interaction_matrices_dict and interaction_matrices_dict["choquet"]:
-        # Average over simulations 
-        avg_shapley_full = np.mean(np.vstack(shapley_full), axis=0)
-        avg_marginal_full = np.mean(np.vstack(marginal_full), axis=0)
-        avg_interaction_matrix_full = np.mean(np.array(interaction_matrices_dict["choquet"]), axis=0)
-        
-        # Method 1: From the interaction matrix - sum rows and divide by 2
-        overall_method1 = 0.5 * np.sum(avg_interaction_matrix_full, axis=1)
-        
-        # Method 2: Difference between Shapley and marginal values
-        overall_method2 = avg_shapley_full - avg_marginal_full 
-
-        # Right after calculating overall_method1 and overall_method2:
-        print("Matrix Method values:", overall_method1)
-        print("Shapley-Marginal values:", overall_method2)
-        print("Absolute difference:", np.abs(overall_method1 - overall_method2))
-
-        # Check where marginal_full is actually coming from
-        print("\nSingleton coalitions:")
-        for i in range(min(5, len(marginal_full[0]))): # Show first 5
-            print(f"Feature {i}: singleton value = {marginal_full[0][i]}")
-
-        # Verify calculation for a single feature
-        feature_idx = 0  # Check first feature
-        shapley_contribution = avg_shapley_full[feature_idx]
-        marginal_contribution = avg_marginal_full[feature_idx]
-        interaction_sum = 0.5 * np.sum(avg_interaction_matrix_full[feature_idx, :])
-
-        print(f"\nFor feature {feature_idx}:")
-        print(f"  Shapley value: {shapley_contribution}")
-        print(f"  Marginal/Singleton value: {marginal_contribution}")
-        print(f"  0.5 * Sum of interactions: {interaction_sum}")
-        print(f"  Shapley - Marginal: {shapley_contribution - marginal_contribution}")       
-
-        # Absolute interaction effect (captures interaction magnitude regardless of direction)
-        overall_method4 = 0.5 * np.sum(np.abs(avg_interaction_matrix_full), axis=1)
-        
-        # Plot the overall interaction indices for all three methods
-        overall_dict = {
-            "Matrix Method": overall_method1,
-            "Shapley - Marginal": overall_method2,
-            "Absolute Matrix Method": overall_method4
-        }
-        plot_overall_interaction(feature_names, overall_dict, "Overall Interaction Comparison", plot_folder)
-
+        if (interpretability_data["choquet_2add"]["interaction_matrix"] and 
+            interpretability_data["mlm_2add"]["interaction_matrix"]):
+            plot_interaction_comparison(
+                feature_names, 
+                interpretability_data["choquet_2add"]["interaction_matrix"], 
+                interpretability_data["mlm_2add"]["interaction_matrix"], 
+                plot_folder, 
+                "2add"
+            )
     
+    # Compare overall interaction indices computed using different methods
+    if "choquet" in methods:
+        choquet_data = interpretability_data["choquet"]
+        if (choquet_data["power_indices"] and 
+            choquet_data["marginal_values"] and 
+            choquet_data["interaction_matrix"]):
+            
+            # Average over simulations
+            avg_shapley = np.mean(np.vstack(choquet_data["power_indices"]), axis=0)
+            avg_marginal = np.mean(np.vstack(choquet_data["marginal_values"]), axis=0)
+            avg_interaction = np.mean(np.array(choquet_data["interaction_matrix"]), axis=0)
+            
+            # Method 1: From interaction matrix - sum rows and divide by 2
+            overall_method1 = overall_interaction_index(avg_interaction)
+            
+            # Do NOT apply automatic scaling - use raw mathematical values consistently
+            # This ensures consistency with the previous version
+            overall_method1_plot = overall_method1
+            
+            # Method 2: Difference between Shapley and marginal values
+            overall_method2 = overall_interaction_from_shapley(avg_shapley, avg_marginal)
+            
+            # Method 3: From absolute interactions
+            overall_method3 = overall_interaction_index_abs(avg_interaction)
+            
+            # Plot the overall interaction indices for all three methods
+            overall_dict = {
+                "Matrix Method": overall_method1_plot,
+                "Shapley - Marginal": overall_method2,
+                "Absolute Matrix Method": overall_method3
+            }
+            
+            plot_overall_interaction(
+                feature_names, 
+                overall_dict, 
+                "Overall Interaction Comparison", 
+                plot_folder
+            )
+            
+            # Add verification output
+            print("\nVerification of interaction calculation methods:")
+            print("Matrix Method values:", overall_method1)
+            print("Shapley-Marginal values:", overall_method2)
+            print("Absolute difference:", np.abs(overall_method1 - overall_method2))
 
+    # For final verification of scale consistency
+    if "choquet" in methods and "choquet_2add" in methods:
+        # Get all shapley values
+        choquet_shapley = np.mean(np.vstack(interpretability_data["choquet"]["power_indices"]), axis=0)  
+        choquet_2add_shapley = np.mean(np.vstack(interpretability_data["choquet_2add"]["power_indices"]), axis=0)
+        
+        print("\nScaling verification:")
+        print(f"Choquet full shapley range: {np.min(choquet_shapley):.4f} to {np.max(choquet_shapley):.4f}")
+        print(f"Choquet 2add shapley range: {np.min(choquet_2add_shapley):.4f} to {np.max(choquet_2add_shapley):.4f}")
+        
+        # Let's calculate reasonable scale factors for debugging purposes
+        shapley_ratio = np.mean(np.abs(choquet_shapley)) / np.mean(np.abs(choquet_2add_shapley))
+        print(f"Average magnitude ratio (full/2add): {shapley_ratio:.4f}")
 
-
-    """
-    # Plot the Shapley values vs. interaction effect for the full Choquet model
-    from simulation_helper_functions import weighted_full_interaction_effect
-    m = X_train.shape[1]
-    indices = weighted_full_interaction_effect(avg_coef_full, all_coalitions, m)
-    plot_shapley_vs_interaction(feature_names, shapley_full, indices, plot_folder, method="choquet")
-
-    # Plot Shapelies vs. interaction effect for the 2-additive Choquet model
-    from simulation_helper_functions import weighted_pairwise_interaction_effect
-    indices = weighted_pairwise_interaction_effect(avg_coef_2add, interaction_matrix, m)
-    plot_shapley_vs_interaction(feature_names, shapley_2add, indices, plot_folder, method="choquet_2add")
-
-    
-    # Plot ISR for both choquet and choquet_2add
-
-    # Get the coalitions for choquet
-    if scale_data:
-        X_co = StandardScaler().fit_transform(X_train)
-    else:
-        X_co = X_train
-    _, all_coalitions = choquet_matrix(X_co)
-    choquet_coalitions = [sorted(coal) for coal in all_coalitions]
-
-    # Get the coalitions for choquet_2add
-    nAttr = X_train.shape[1]
-    all_coalitions_2add = [()] + [(i,) for i in range(nAttr)] + [tuple(sorted(pair)) for pair in itertools.combinations(range(nAttr), 2)]
-    choquet_2add_coalitions = [sorted(coal) for coal in all_coalitions_2add]
-
-    # For full choquet shapley values:
-    if shapley_full and len(shapley_full) > 0:
-        avg_shapley_full = np.mean(np.vstack(shapley_full), axis=0)
-    else:
-        nAttr = X_train.shape[1]
-        avg_shapley_full = np.zeros(nAttr)  # Default to zeros if no values
-
-    # For choquet 2-add shapley values:
-    if shapley_2add and len(shapley_2add) > 0:
-        avg_shapley_2add = np.mean(np.vstack(shapley_2add), axis=0)
-    else:
-        nAttr = X_train.shape[1]
-        avg_shapley_2add = np.zeros(nAttr)  # Default to zeros if no values
-
-    # Compute ISR for both models
-    from simulation_helper_functions import  interaction_shapley_ratio
-    isr_full = interaction_shapley_ratio(avg_shapley_full, interaction_matrices_dict["choquet"], choquet_coalitions, m=nAttr)
-    isr_2add = interaction_shapley_ratio(avg_shapley_2add, interaction_matrices_dict["choquet_2add"], choquet_2add_coalitions, m=nAttr)
-    plot_shapley_vs_interaction(feature_names, isr_full, isr_2add, plot_folder, method="ISR")
-    """
-    
-
+    # Model accuracy comparison
     model_names = sorted(all_sim_results.keys())
     plot_test_accuracy(model_names, all_sim_results, plot_folder)
     
@@ -527,7 +520,7 @@ def simulation(
     for model_name in model_names:
         accs = [sim["test_acc"] for sim in all_sim_results[model_name]]
         print(f"Model: {model_name}, Test Acc: {np.mean(accs):.2%} ± {np.std(accs):.2%}")
-
+    
     # Plot decision boundary for 2D data
     if X.shape[1] == 2:
         plot_decision_boundary(X_train, y_train, lr_baseline, join(plot_folder, "boundary_lr.png"))
@@ -542,16 +535,28 @@ def simulation(
             )
             model_ch2add.fit(X_train, y_train)
             plot_decision_boundary(X_train, y_train, model_ch2add, join(plot_folder, "boundary_choq.png"))
-
-    # Package final results
-    final_results = {"simulations": all_sim_results}
-    """
-    if os.path.dirname(results_filename):
-        ensure_folder(os.path.dirname(results_filename))
     
-    with open(results_filename, "wb") as f:
+    # Package final results
+    final_results = {
+        "simulations": all_sim_results,
+        "interpretability": interpretability_data
+    }
+    
+    # Save results to pickle file - ensure it's saved in the dataset folder
+    # Extract only the filename part if a path was provided
+    results_filename_only = os.path.basename(results_filename)
+    if not results_filename_only.endswith('.pkl'):
+        results_filename_only = "results.pkl"
+    
+    # Always save in the dataset-specific plot folder
+    results_path = os.path.join(plot_folder, results_filename_only)
+    
+    # Make sure directory exists
+    ensure_folder(os.path.dirname(results_path))
+    
+    print(f"\nSaving simulation results to {results_path}")
+    with open(results_path, 'wb') as f:
         pickle.dump(final_results, f)
-    print("Saved overall results to", results_filename)"
-    """
+    print("Results saved successfully.")
     
     return final_results

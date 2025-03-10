@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import itertools
 from os.path import join
 from simulation_helper_functions import plot_horizontal_bar, ensure_folder
 
@@ -10,11 +9,6 @@ def plot_shapley_full(feature_names, all_shapley_full, plot_folder):
         return
     all_shapley_full_arr = np.vstack(all_shapley_full)
     mean_shapley_full = np.mean(all_shapley_full_arr, axis=0)
-    
-    # Print value range for verification
-    print(f"Full Shapley values range: {np.min(mean_shapley_full):.4f} to {np.max(mean_shapley_full):.4f}")
-    print(f"Full Shapley average magnitude: {np.mean(np.abs(mean_shapley_full)):.4f}")
-    
     filename = join(plot_folder, "shapley_full.png")
     plot_horizontal_bar(
         names=feature_names,
@@ -33,11 +27,6 @@ def plot_shapley_2add(feature_names, all_shapley_2add, plot_folder):
     all_shapley_2add_arr = np.vstack(all_shapley_2add)
     mean_shapley_2add = np.mean(all_shapley_2add_arr, axis=0)
     std_shapley_2add = np.std(all_shapley_2add_arr, axis=0)
-    
-    # Print value range for verification  
-    print(f"2-add Shapley values range: {np.min(mean_shapley_2add):.4f} to {np.max(mean_shapley_2add):.4f}")
-    print(f"2-add Shapley average magnitude: {np.mean(np.abs(mean_shapley_2add)):.4f}")
-    
     filename = join(plot_folder, "shapley_2add.png")
     plot_horizontal_bar(
         names=feature_names,
@@ -69,143 +58,63 @@ def plot_marginal_2add(feature_names, all_marginal_2add, plot_folder):
     )
     print("Saved marginal contributions plot to:", filename)
 
-def plot_coef_full(X, mean_coef_full, plot_folder, model_type="choquet"):
-    """
-    Plot coefficients for the full model (Choquet or MLM).
-    
-    Parameters:
-    -----------
-    X : array-like
-        Original feature matrix (used to determine number of features)
-    mean_coef_full : array-like
-        Average coefficient values across simulations
-    plot_folder : str
-        Directory to save the plot
-    model_type : str, default="choquet"
-        Type of model: "choquet" or "mlm"
-    """
+def plot_coef_full(X, mean_coef_full, plot_folder):
     if mean_coef_full is None or mean_coef_full.size == 0:
-        print(f"No full {model_type} regression coefficients computed; skipping plot.")
+        print("No full Choquet regression coefficients computed; skipping plot.")
         return
-    
-    # Generate coalitions
-    nAttr = X.shape[1]
-    all_coalitions = []
-    for r in range(1, nAttr + 1):
-        all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
-    
-    # Generate labels for features based on model type
-    coalition_labels = []
-    if model_type.lower() == "choquet":
-        coalition_labels = [",".join(f"{i+1}" for i in coalition) for coalition in all_coalitions]
-        color = "gray"
-        title = "Average Regression Coefficients for All Coalitions (Full Choquet)"
-        filename = "coef_full.png"
-    else:  # MLM
-        for coalition in all_coalitions:
-            label_parts = []
-            # Add the active features
-            active_parts = [f"{i+1}" for i in coalition]
-            label_parts.append(",".join(active_parts))
-            # Add complement features if not full set
-            if len(coalition) < nAttr:
-                complement_parts = [f"¬{i+1}" for i in range(nAttr) if i not in coalition]
-                if complement_parts:
-                    label_parts.append(",".join(complement_parts))
-            coalition_labels.append(" × ".join(label_parts))
-        color = "cornflowerblue"
-        title = "Average Regression Coefficients (Full MLM Model)"
-        filename = "coef_mlm_full.png"
-    
-    # Sort and plot
+    from regression_classes import choquet_matrix
+    _, all_coalitions = choquet_matrix(X)
+    coalition_labels = [",".join(f"{i+1}" for i in coalition) for coalition in all_coalitions]
     indices_sorted = np.argsort(np.abs(mean_coef_full))[::-1]
     sorted_labels = np.array(coalition_labels)[indices_sorted]
     sorted_values = mean_coef_full[indices_sorted]
-    
     fig_height = max(6, len(sorted_labels) * 0.15)
     plt.figure(figsize=(10, fig_height))
-    plt.barh(sorted_labels, sorted_values, color=color, edgecolor="black")
+    plt.barh(sorted_labels, sorted_values, color="gray", edgecolor="black")
     plt.xlabel("Regression Coefficient")
-    plt.title(title)
+    plt.title("Average Regression Coefficients for All Coalitions (Full Choquet)")
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plot_path = join(plot_folder, filename)
+    plot_path = join(plot_folder, "coef_full.png")
     plt.savefig(plot_path)
     plt.close()
-    print(f"Saved {model_type} regression coefficients plot to:", plot_path)
+    print("Saved regression coefficients plot to:", plot_path)
 
-def plot_coef_2add(feature_names, mean_coef_2add, plot_folder, model_type="choquet"):
-    """
-    Plot coefficients for the 2-additive model (Choquet or MLM).
-    
-    Parameters:
-    -----------
-    feature_names : list
-        Names of the features
-    mean_coef_2add : array-like
-        Average coefficient values across simulations
-    plot_folder : str
-        Directory to save the plot
-    model_type : str, default="choquet"
-        Type of model: "choquet" or "mlm"
-    """
+
+def plot_coef_2add(feature_names, mean_coef_2add, plot_folder):
     if mean_coef_2add is None or mean_coef_2add.size == 0:
-        print(f"No {model_type} 2-add regression coefficients computed; skipping plot.")
+        print("No Choquet 2-add regression coefficients computed; skipping plot.")
         return
-    
     n_features = len(feature_names)
     singleton_labels = feature_names
     interaction_labels = []
-    
-    # Generate pair labels based on model type
     for i in range(n_features):
         for j in range(i+1, n_features):
-            if model_type.lower() == "choquet":
-                interaction_labels.append(f"{feature_names[i]},{feature_names[j]}")
-            else:  # MLM
-                interaction_labels.append(f"{feature_names[i]}×{feature_names[j]}")
-    
-    # Set style based on model type
-    if model_type.lower() == "choquet":
-        color = "gray"
-        title = "Average Regression Coefficients (Choquet 2-add Model)"
-        filename = "coef_2add.png"
-    else:  # MLM
-        color = "cornflowerblue"
-        title = "Average Regression Coefficients (MLM 2-add Model)"
-        filename = "coef_mlm_2add.png"
-    
-    # Sort and plot
+            interaction_labels.append(f"{feature_names[i]},{feature_names[j]}")
     all_labels = np.array(list(singleton_labels) + interaction_labels)
     indices_sorted = np.argsort(np.abs(mean_coef_2add))[::-1]
     sorted_labels = all_labels[indices_sorted]
     sorted_values = mean_coef_2add[indices_sorted]
-    
     fig_height = max(6, len(sorted_labels) * 0.15)
     plt.figure(figsize=(10, fig_height))
-    plt.barh(sorted_labels, sorted_values, color=color, edgecolor="black")
+    plt.barh(sorted_labels, sorted_values, color="gray", edgecolor="black")
     plt.xlabel("Regression Coefficient")
-    plt.title(title)
+    plt.title("Average Regression Coefficients (Choquet 2-add Model)")
     plt.gca().invert_yaxis()
     plt.tight_layout()
-    plot_path = join(plot_folder, filename)
+    plot_path = join(plot_folder, "coef_2add.png")
     plt.savefig(plot_path)
     plt.close()
-    print(f"Saved {model_type} 2-add regression coefficients plot to:", plot_path)
+    print("Saved regression coefficients plot for Choquet 2-add model to:", plot_path)
+
 
 def plot_interaction_matrix(X, feature_names, all_interaction_matrices, plot_folder, method):
     if not all_interaction_matrices:
         print("No interaction effects computed; skipping plot.")
         return
     mean_interaction_matrix = np.mean(np.array(all_interaction_matrices), axis=0)
-    
-    # Print range information but don't let it affect plot scaling
-    print(f"{method} interaction matrix range: {np.min(mean_interaction_matrix):.4f} to {np.max(mean_interaction_matrix):.4f}")
-    print(f"{method} interaction average magnitude: {np.mean(np.abs(mean_interaction_matrix)):.4f}")
-    
-    # Use consistent visualization settings to match previous version
-    plt.figure(figsize=(8, 6))  # Keep original size
-    plt.imshow(mean_interaction_matrix, cmap="viridis", interpolation="nearest")  # Keep original colormap
+    plt.figure(figsize=(8, 6))
+    plt.imshow(mean_interaction_matrix, cmap="viridis", interpolation="nearest")
     plt.colorbar(orientation="vertical", label="Interaction Value")
     plt.xticks(range(X.shape[1]), feature_names, rotation=90, fontsize=12)
     plt.yticks(range(X.shape[1]), feature_names, fontsize=12)
@@ -215,6 +124,8 @@ def plot_interaction_matrix(X, feature_names, all_interaction_matrices, plot_fol
     plt.savefig(plot_path)
     plt.close()
     print("Saved interaction effects plot to:", plot_path)
+
+
 
 def plot_log_odds_hist(all_log_odds, log_odds_bins, plot_folder):
     if not all_log_odds:
@@ -326,6 +237,8 @@ def plot_decision_boundary(X, y, model, filename):
     plt.close()
     print("Saved decision boundary plot to:", filename)
 
+
+
 def plot_overall_interaction(feature_names, method_dict, title, plot_folder):
     """Plot overall interaction indices using different methods."""
     n_methods = len(method_dict)
@@ -369,32 +282,22 @@ def plot_overall_interaction(feature_names, method_dict, title, plot_folder):
                 dpi=300, bbox_inches='tight')
     plt.close()
 
+
+
+
 def plot_interaction_comparison(feature_names, choquet_interaction, mlm_interaction, plot_folder, method_suffix="2add"):
     """
-    Compare interaction matrices between Choquet and MLM models side by side.
-    
-    Parameters:
-    -----------
-    feature_names : list
-        Names of the features
-    choquet_interaction : list of numpy.ndarray
-        Interaction matrices for Choquet model
-    mlm_interaction : list of numpy.ndarray
-        Interaction matrices for MLM model
-    plot_folder : str
-        Directory to save the plot
-    method_suffix : str, default="2add"
-        Suffix for the filename, indicating if it's "full" or "2add"
+    Compare interaction matrices between Choquet and MLM models.
     """
     # Average over simulations
     avg_choquet = np.mean(np.array(choquet_interaction), axis=0)
     avg_mlm = np.mean(np.array(mlm_interaction), axis=0)
     
-    # Create a figure with two subplots - use consistent sizing from previous version
-    fig, axes = plt.subplots(1, 2, figsize=(18, 8))
+    # Create a figure with two subplots - INCREASE SIZE
+    fig, axes = plt.subplots(1, 2, figsize=(18, 8))  # Increased from (15, 7)
     
-    # Plot Choquet interaction - use original "viridis" colormap without custom scaling
-    im1 = axes[0].imshow(avg_choquet, cmap='viridis')
+    # Plot Choquet interaction
+    im1 = axes[0].imshow(avg_choquet, cmap='coolwarm', vmin=-1, vmax=1)
     axes[0].set_title(f'Choquet {method_suffix} Interaction', fontsize=14)
     axes[0].set_xticks(np.arange(len(feature_names)))
     axes[0].set_yticks(np.arange(len(feature_names)))
@@ -402,8 +305,8 @@ def plot_interaction_comparison(feature_names, choquet_interaction, mlm_interact
     axes[0].set_xticklabels(feature_names, rotation=90, fontsize=10)
     axes[0].set_yticklabels(feature_names, fontsize=10)
     
-    # Plot MLM interaction - use original "viridis" colormap without custom scaling
-    im2 = axes[1].imshow(avg_mlm, cmap='viridis')
+    # Plot MLM interaction
+    im2 = axes[1].imshow(avg_mlm, cmap='coolwarm', vmin=-1, vmax=1)
     axes[1].set_title(f'MLM {method_suffix} Interaction', fontsize=14)
     axes[1].set_xticks(np.arange(len(feature_names)))
     axes[1].set_yticks(np.arange(len(feature_names)))
@@ -415,46 +318,11 @@ def plot_interaction_comparison(feature_names, choquet_interaction, mlm_interact
     cbar = fig.colorbar(im1, ax=axes.ravel().tolist(), shrink=0.6)
     cbar.ax.tick_params(labelsize=10)
     
-    # Use original spacing settings
-    fig.subplots_adjust(wspace=0.3, bottom=0.2)
+    # REPLACE tight_layout with more explicit spacing
+    # plt.tight_layout()  # Remove this
+    fig.subplots_adjust(wspace=0.3, bottom=0.2)  # Add explicit spacing
     
+    # Keep bbox_inches='tight' for final adjustment
     plt.savefig(join(plot_folder, f'interaction_comparison_{method_suffix}.png'), 
                 dpi=300, bbox_inches='tight')
     plt.close()
-
-def plot_banzhaf_indices(feature_names, banzhaf_indices, plot_folder, method):
-    """
-    Plot Banzhaf power indices for features.
-    
-    Parameters:
-    -----------
-    feature_names : list
-        Names of the features
-    banzhaf_indices : list of numpy.ndarray
-        List of Banzhaf indices for each simulation
-    plot_folder : str
-        Directory to save the plot
-    method : str
-        Method name for title and filename
-    """
-    if not banzhaf_indices:
-        print(f"No Banzhaf indices computed for {method}; skipping plot.")
-        return
-        
-    banzhaf_array = np.vstack(banzhaf_indices)
-    mean_banzhaf = np.mean(banzhaf_array, axis=0)
-    std_banzhaf = np.std(banzhaf_array, axis=0)
-    
-    filename = join(plot_folder, f"banzhaf_indices_{method}.png")
-    
-    plot_horizontal_bar(
-        names=feature_names,
-        values=mean_banzhaf,
-        std=std_banzhaf,
-        title=f"Average Banzhaf Power Indices ({method})",
-        xlabel="Average Banzhaf Power Index",
-        filename=filename,
-        color="indianred"
-    )
-    
-    print(f"Saved Banzhaf indices plot for {method} to: {filename}")
