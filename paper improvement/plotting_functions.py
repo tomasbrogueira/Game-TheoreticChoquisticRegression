@@ -239,48 +239,90 @@ def plot_decision_boundary(X, y, model, filename):
 
 
 
-def plot_overall_interaction(feature_names, overall_data_dict, title, plot_folder):
-    """
-    Plot overall interaction indices for each feature as grouped bars.
+def plot_overall_interaction(feature_names, method_dict, title, plot_folder):
+    """Plot overall interaction indices using different methods."""
+    n_methods = len(method_dict)
     
-    For each feature, the function displays one bar per method (each with a distinct color).
+    # Create a wider figure for better spacing
+    fig, ax = plt.subplots(figsize=(12, 8))
     
-    Parameters:
-      feature_names (list of str): List of feature names.
-      overall_data_dict (dict): Dictionary mapping method names (str) to overall interaction 
-                                index arrays (1D numpy arrays of length equal to number of features).
-      title (str): Title of the plot.
-      plot_folder (str): Directory to save the plot.
-    """
-    n_features = len(feature_names)
-    method_names = list(overall_data_dict.keys())
-    n_methods = len(method_names)
+    # Set up bar positions
+    bar_width = 0.8 / n_methods
+    opacity = 0.8
     
-    # X locations for groups of bars
-    ind = np.arange(n_features)
-    width = 0.8 / n_methods  # Total group width is 0.8
+    # Sort features by the average across methods
+    avg_values = np.mean([values for values in method_dict.values()], axis=0)
+    sorted_indices = np.argsort(avg_values)
+    sorted_features = [feature_names[i] for i in sorted_indices]
     
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Plot each method's bars - CHANGE FROM bar TO barh
+    for i, (method_name, values) in enumerate(method_dict.items()):
+        sorted_values = values[sorted_indices]
+        # For horizontal bars, we flip the coordinates
+        pos = np.arange(len(sorted_features))
+        # Position bars along y-axis with proper spacing
+        y_pos = pos - (n_methods-1)/2 * bar_width + i * bar_width
+        ax.barh(y_pos, sorted_values, bar_width, alpha=opacity, label=method_name)
     
-    # Define a color cycle (or use a colormap)
-    colors = plt.cm.Set1(np.linspace(0, 1, n_methods))
+    # Set up axes and labels - X and Y are now correct for horizontal bars
+    ax.set_xlabel('Interaction Index Value', fontsize=12)
+    ax.set_yticks(range(len(sorted_features)))
     
-    for idx, method in enumerate(method_names):
-        overall = overall_data_dict[method]
-        # Position each bar within its group
-        ax.bar(ind + idx * width, overall, width, label=method, color=colors[idx])
+    # Adjust label size based on number of features
+    label_fontsize = max(6, min(12, 200 / len(sorted_features)))
+    ax.set_yticklabels(sorted_features, fontsize=label_fontsize)
     
-    ax.set_ylabel("Overall Interaction Index")
-    ax.set_title(title)
-    # Center x-ticks in the group
-    ax.set_xticks(ind + width * (n_methods - 1) / 2)
-    ax.set_xticklabels(feature_names, rotation=45, ha="right")
-    ax.legend()
-    ax.grid(axis="y", linestyle="--", alpha=0.7)
+    ax.set_title(title, fontsize=14)
+    ax.legend(loc='best')
     
-    plt.tight_layout()
-    ensure_folder(plot_folder)
-    output_path = join(plot_folder, title.replace(" ", "_") + ".png")
-    plt.savefig(output_path)
+    # Use explicit padding instead of tight_layout
+    plt.subplots_adjust(left=0.25, right=0.95, top=0.95, bottom=0.1)
+    
+    plt.savefig(join(plot_folder, 'Overall_Interaction_Comparison.png'), 
+                dpi=300, bbox_inches='tight')
     plt.close()
-    print("Saved overall interaction plot to", output_path)
+
+
+
+
+def plot_interaction_comparison(feature_names, choquet_interaction, mlm_interaction, plot_folder, method_suffix="2add"):
+    """
+    Compare interaction matrices between Choquet and MLM models.
+    """
+    # Average over simulations
+    avg_choquet = np.mean(np.array(choquet_interaction), axis=0)
+    avg_mlm = np.mean(np.array(mlm_interaction), axis=0)
+    
+    # Create a figure with two subplots - INCREASE SIZE
+    fig, axes = plt.subplots(1, 2, figsize=(18, 8))  # Increased from (15, 7)
+    
+    # Plot Choquet interaction
+    im1 = axes[0].imshow(avg_choquet, cmap='coolwarm', vmin=-1, vmax=1)
+    axes[0].set_title(f'Choquet {method_suffix} Interaction', fontsize=14)
+    axes[0].set_xticks(np.arange(len(feature_names)))
+    axes[0].set_yticks(np.arange(len(feature_names)))
+    # Adjust label size and padding
+    axes[0].set_xticklabels(feature_names, rotation=90, fontsize=10)
+    axes[0].set_yticklabels(feature_names, fontsize=10)
+    
+    # Plot MLM interaction
+    im2 = axes[1].imshow(avg_mlm, cmap='coolwarm', vmin=-1, vmax=1)
+    axes[1].set_title(f'MLM {method_suffix} Interaction', fontsize=14)
+    axes[1].set_xticks(np.arange(len(feature_names)))
+    axes[1].set_yticks(np.arange(len(feature_names)))
+    # Adjust label size and padding
+    axes[1].set_xticklabels(feature_names, rotation=90, fontsize=10)
+    axes[1].set_yticklabels(feature_names, fontsize=10)
+    
+    # Add colorbar with adjusted size
+    cbar = fig.colorbar(im1, ax=axes.ravel().tolist(), shrink=0.6)
+    cbar.ax.tick_params(labelsize=10)
+    
+    # REPLACE tight_layout with more explicit spacing
+    # plt.tight_layout()  # Remove this
+    fig.subplots_adjust(wspace=0.3, bottom=0.2)  # Add explicit spacing
+    
+    # Keep bbox_inches='tight' for final adjustment
+    plt.savefig(join(plot_folder, f'interaction_comparison_{method_suffix}.png'), 
+                dpi=300, bbox_inches='tight')
+    plt.close()
