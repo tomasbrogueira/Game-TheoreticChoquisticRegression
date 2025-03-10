@@ -248,3 +248,91 @@ def overall_interaction_from_shapley(shapley_vals, marginal_vals):
         np.ndarray: A 1D array of overall interaction effects for each feature.
     """
     return shapley_vals - marginal_vals
+
+
+
+
+# debugging functions
+
+def compare_transformations(X_sample):
+    from sklearn.preprocessing import MinMaxScaler
+    from regression_classes import choquet_matrix_2add, mlm_matrix_2add
+    """Compare all transformation methods using a sample."""
+    # Ensure data is properly scaled
+    scaler = MinMaxScaler()
+    X_scaled = scaler.fit_transform(X_sample)
+    
+    # Apply transformations
+    choq_trans = choquet_matrix_2add(X_scaled)
+    mlm_trans = mlm_matrix_2add(X_scaled)
+    
+    # Create synthetic data with non-binary values
+    X_synthetic = np.random.random((3, X_sample.shape[1]))
+    choq_synth = choquet_matrix_2add(X_synthetic)
+    mlm_synth = mlm_matrix_2add(X_synthetic)
+    
+    # Print differences
+    print("Real data difference:", np.sum(np.abs(choq_trans - mlm_trans)))
+    print("Synthetic data difference:", np.sum(np.abs(choq_synth - mlm_synth)))
+    
+    # Print sample values to compare min vs product
+    i, j = 0, 1  # First two features
+    print(f"\nComparison for features {i} and {j}:")
+    print(f"X_synthetic values: {X_synthetic[0, i]:.4f}, {X_synthetic[0, j]:.4f}")
+    print(f"min: {min(X_synthetic[0, i], X_synthetic[0, j]):.4f}")
+    print(f"product: {X_synthetic[0, i] * X_synthetic[0, j]:.4f}")
+
+
+
+
+def verify_shapley_decomposition(feature_idx, v, all_coalitions, m):
+    """Verify Shapley decomposition for a specific feature"""
+    from regression_classes import compute_shapley_values, compute_choquet_interaction_matrix
+    # Get Shapley value
+    shapley = compute_shapley_values(v, m, all_coalitions)[feature_idx]
+    
+    # Get singleton value
+    try:
+        singleton_idx = all_coalitions.index((feature_idx,))
+        singleton = v[singleton_idx+1]
+    except ValueError:
+        singleton = 0.0
+        
+    # Get interaction matrix
+    int_matrix = compute_choquet_interaction_matrix(v, m, all_coalitions)
+    int_sum = 0.5 * np.sum(int_matrix[feature_idx, :])
+    
+    # Verify the relationship
+    print(f"Shapley: {shapley}")
+    print(f"Singleton: {singleton}")
+    print(f"0.5 * Sum Interactions: {int_sum}")
+    print(f"Singleton + Interactions: {singleton + int_sum}")
+    print(f"Difference: {shapley - (singleton + int_sum)}")
+
+
+
+
+
+def verify_matrix_shapley_equivalence(v, m, all_coalitions):
+    """Verify the mathematical relationship: φᵢ = v({i}) + 0.5 * Σⱼ≠ᵢ I({i,j})"""
+    from regression_classes import compute_shapley_values, compute_choquet_interaction_matrix
+    shapley = compute_shapley_values(v, m, all_coalitions)
+    int_matrix = compute_choquet_interaction_matrix(v, m, all_coalitions)
+    
+    # Get singleton values
+    singletons = np.zeros(m)
+    for i in range(m):
+        try:
+            idx = all_coalitions.index((i,))
+            singletons[i] = v[idx + 1]  # +1 for empty set
+        except ValueError:
+            pass
+            
+    # Calculate method 1: from interaction matrix
+    method1 = singletons + 0.5 * np.sum(int_matrix, axis=1)
+    
+    # Compare with shapley values
+    diff = np.abs(method1 - shapley)
+    print("Matrix vs Shapley max difference:", np.max(diff))
+    print("Matrix vs Shapley average difference:", np.mean(diff))
+    return diff

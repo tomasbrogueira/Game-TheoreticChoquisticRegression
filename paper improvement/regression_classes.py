@@ -220,9 +220,9 @@ def mlm_matrix_2add(X_orig):
     """
     Compute the 2-additive multilinear model transformation.
     
-    In a 2-additive MLM, we only consider singletons and pairs:
-    - For singleton {i}: x_i * Π_{j≠i} (1-x_j)
-    - For pair {i,j}: x_i * x_j * Π_{k≠i,j} (1-x_k)
+    In a 2-additive MLM, we consider:
+    - Original features (singletons)
+    - Simple pairwise products
     
     Parameters:
     -----------
@@ -239,37 +239,14 @@ def mlm_matrix_2add(X_orig):
     n_pairs = comb(nAttr, 2)
     data_opt = np.zeros((nSamp, n_singletons + n_pairs))
     
-    # Assume X_orig is already properly scaled to [0,1] by caller
+    # Use original features for singletons
+    data_opt[:, :n_singletons] = X_orig
     
-    # Calculate singleton terms: x_i * Π_{j≠i} (1-x_j)
-    for i in range(nAttr):
-        # Get all features except i
-        others = [j for j in range(nAttr) if j != i]
-        
-        # Calculate x_i
-        x_i = X_orig[:, i]
-        
-        # Calculate Π_{j≠i} (1-x_j)
-        prod_complement = np.prod(1 - X_orig[:, others], axis=1)
-        
-        # Store the result
-        data_opt[:, i] = x_i * prod_complement
-    
-    # Calculate pairwise terms: x_i * x_j * Π_{k≠i,j} (1-x_k)
+    # Calculate pairwise terms as simple products
     idx = n_singletons
     for i in range(nAttr):
         for j in range(i + 1, nAttr):
-            # Get all features except i and j
-            others = [k for k in range(nAttr) if k != i and k != j]
-            
-            # Calculate x_i * x_j
-            x_ij = X_orig[:, i] * X_orig[:, j]
-            
-            # Calculate Π_{k≠i,j} (1-x_k)
-            prod_complement = np.prod(1 - X_orig[:, others], axis=1)
-            
-            # Store the result
-            data_opt[:, idx] = x_ij * prod_complement
+            data_opt[:, idx] = X_orig[:, i] * X_orig[:, j]
             idx += 1
     
     return data_opt
@@ -1170,9 +1147,9 @@ def compute_capacity_value(S, v, all_coalitions, k=None):
     S : tuple
         A coalition (sorted tuple of feature indices)
     v : array-like
-        Array of capacity/game values
+        Array of capacity/game values (v[0] is assumed to be empty set)
     all_coalitions : list of tuples
-        List of all coalitions in the model
+        List of all coalitions in the model (NOT including empty set)
     k : int or None, optional
         Additivity limit for k-additive models. If None, attempts direct lookup.
         
@@ -1184,29 +1161,33 @@ def compute_capacity_value(S, v, all_coalitions, k=None):
     if len(S) == 0:
         return 0.0
         
-    # If S is in all_coalitions and we're not forcing reconstruction, use direct lookup
-    if (k is None or len(S) <= k) and S in all_coalitions:
+    # Ensure S is a sorted tuple for consistent lookup
+    S = tuple(sorted(S))
+        
+    # If S is in all_coalitions, use direct lookup with +1 offset for empty set
+    if S in all_coalitions:
         try:
-            return v[all_coalitions.index(S)]
+            idx = all_coalitions.index(S)
+            return v[idx + 1]  # +1 because v[0] is for empty set
         except (ValueError, IndexError):
             pass  # Fall back to reconstruction
     
-    # Otherwise reconstruct from Möbius coefficients
+    # For k-additive models, reconstruct from smaller coalitions
     if k is not None:
-        total = 0.0
-        max_r = min(len(S), k)  # In k-additive models, only consider subsets up to size k
-        
-        # Sum m(T) over all subsets T of S with |T| ≤ k
-        for r in range(1, max_r + 1):
-            for T in itertools.combinations(S, r):
-                T = tuple(sorted(T))
-                # For efficiency, only compute if T is in all_coalitions
-                if T in all_coalitions:
-                    mobius_value = compute_mobius_transform(T, v, all_coalitions, k)
-                    total += mobius_value
-        return total
-        
-    # If k is None and S is not in all_coalitions, return 0.0
+        # For coalitions larger than k, reconstruct using Möbius coefficients
+        if len(S) > k:
+            total = 0.0
+            # Sum over all subsets T ⊆ S with |T| ≤ k
+            for r in range(1, k + 1):
+                for T in itertools.combinations(S, r):
+                    T = tuple(sorted(T))
+                    if T in all_coalitions:
+                        idx = all_coalitions.index(T)
+                        # Use direct coefficient for existing coalitions
+                        total += v[idx + 1]  # +1 for empty set
+            return total
+            
+    # If we can't compute a value, return 0.0
     return 0.0
 
 
@@ -1283,18 +1264,18 @@ def reconstruct_interaction_value(S, v, all_coalitions, k=None, memo=None):
 # =============================================================================
 def compute_shapley_values(v, m, all_coalitions, k=None):
     """
-    Compute Shapley power indices for all features (Equation 6).
+    Compute Shapley power indices for all features.
     
     φ_j^S = ∑_{B⊆M\\{j}} [(m-|B|-1)!|B|!/m!] * [v(B∪{j}) - v(B)]
     
     Parameters:
     -----------
     v : array-like
-        Capacity/game values for each coalition
+        Capacity/game values for each coalition (with v[0] representing empty set)
     m : int
         Number of features
     all_coalitions : list of tuples
-        List of all coalitions in the model
+        List of all coalitions in the model (not including empty set)
     k : int or None, optional
         Additivity limit for k-additive models. If None, full model is assumed.
         
@@ -1302,11 +1283,12 @@ def compute_shapley_values(v, m, all_coalitions, k=None):
     --------
     numpy.ndarray : Shapley power indices for each feature
     """
-    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
-    phi = np.zeros(m)
+    # Preprocess coalition list consistently - use sorted tuples
+    processed_coalitions = [tuple(sorted(coal)) for coal in all_coalitions]
+    coalition_to_index = {coal: idx for idx, coal in enumerate(processed_coalitions)}
+    coalition_values = {}  # Memoization cache
     
-    # Memoization cache to avoid recomputing the same coalition values
-    coalition_values = {}
+    phi = np.zeros(m)
     
     def get_value(coalition):
         """Get coalition value with memoization"""
@@ -1320,7 +1302,8 @@ def compute_shapley_values(v, m, all_coalitions, k=None):
         # Calculate and cache the value
         if k is None:
             try:
-                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
+                # Add +1 to match the interaction matrix function
+                value = v[coalition_to_index.get(coalition, -1) + 1] if coalition in coalition_to_index else 0.0
             except (KeyError, IndexError):
                 value = 0.0
         else:
@@ -1329,23 +1312,19 @@ def compute_shapley_values(v, m, all_coalitions, k=None):
         coalition_values[coalition] = value
         return value
     
+    # Compute Shapley values for each feature
     for j in range(m):
         others = [i for i in range(m) if i != j]
         
-        # Determine maximum subset size for iteration
-        max_r = len(others)
-        if k is not None:
-            max_r = min(max_r, k)
-            
-        # Iterate through all subsets B ⊆ M\{j}
-        for r in range(max_r + 1):
+        # Process all subsets of M\{j}
+        for r in range(len(others) + 1):
             for B in itertools.combinations(others, r):
-                B = tuple(sorted(B))
-                Bj = tuple(sorted(B + (j,)))
-                
                 # Calculate marginal contribution
-                vB = get_value(B)
-                vBj = get_value(Bj)
+                B_tuple = tuple(sorted(B))
+                Bj_tuple = tuple(sorted(B + (j,)))
+                
+                vB = get_value(B_tuple)
+                vBj = get_value(Bj_tuple)
                 
                 # Calculate weight: (m-|B|-1)!|B|! / m!
                 weight = factorial(m - r - 1) * factorial(r) / factorial(m)
@@ -1536,11 +1515,11 @@ def compute_choquet_interaction_matrix(v, m, all_coalitions, k=None):
     Parameters:
     -----------
     v : array-like
-        Capacity/game values for each coalition
+        Capacity/game values for each coalition (including 0 for empty set at index 0)
     m : int
         Number of features
     all_coalitions : list of tuples
-        List of all coalitions in the model
+        List of all coalitions in the model (not including empty set)
     k : int or None, optional
         Additivity limit for k-additive models. If None, full model is assumed.
         
@@ -1549,60 +1528,53 @@ def compute_choquet_interaction_matrix(v, m, all_coalitions, k=None):
     numpy.ndarray : A symmetric m×m matrix of Shapley interaction indices
     """
     interaction_matrix = np.zeros((m, m))
-    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
     
-    # Memoization cache for coalition values
-    coalition_values = {}
+    # Preprocess coalition list consistently - use sorted tuples
+    processed_coalitions = [tuple(sorted(coal)) for coal in all_coalitions]
+    coalition_to_index = {coal: idx for idx, coal in enumerate(processed_coalitions)}
     
+    # In compute_choquet_interaction_matrix
     def get_value(coalition):
-        """Get coalition value with memoization"""
+        """Get coalition value with consistent processing"""
         if not coalition:
             return 0.0
-        if coalition in coalition_values:
-            return coalition_values[coalition]
+            
+        sorted_coal = tuple(sorted(coalition))
+        if sorted_coal in coalition_to_index:
+            # +1 because v[0] is empty set
+            return v[coalition_to_index[sorted_coal] + 1]
         
-        if k is None:
-            # For full model, direct lookup or 0
-            try:
-                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
-            except (KeyError, IndexError):
-                value = 0.0
-        else:
-            # For k-additive model, reconstruct the value
-            value = compute_capacity_value(coalition, v, all_coalitions, k)
-        coalition_values[coalition] = value
-        return value
+        # For k-additive models or missing coalitions
+        return compute_capacity_value(sorted_coal, v, processed_coalitions, k)
     
-    # Loop over all distinct pairs of features
+    # Loop over all distinct pairs
     for i in range(m):
         for j in range(i+1, m):
             total = 0.0
-            # Compute the list of features excluding i and j
             others = [feat for feat in range(m) if feat not in (i, j)]
             
-            # Determine the maximum size for the subsets
-            max_r = len(others)
-            if k is not None:
-                max_r = min(max_r, k)
-                
-            for r in range(max_r + 1):
+            # Process ALL subsets of M\{i,j} - correct for any k-additive model
+            for r in range(len(others) + 1):
                 for B in itertools.combinations(others, r):
-                    B = tuple(sorted(B))
-                    
-                    # Weight: ((m - |B| - 2)! * |B|!)/(m - 1)!
+                    # Calculate weight according to Shapley interaction formula
                     weight = factorial(m - r - 2) * factorial(r) / factorial(m - 1)
                     
-                    # Get values for the four required coalitions
-                    vB = get_value(B)
-                    vBi = get_value(tuple(sorted(B + (i,))))
-                    vBj = get_value(tuple(sorted(B + (j,))))
-                    vBij = get_value(tuple(sorted(B + (i, j))))
+                    # Critical fix: ensure consistent handling of coalition values
+                    B_tuple = tuple(sorted(B))
+                    Bi_tuple = tuple(sorted(B + (i,)))
+                    Bj_tuple = tuple(sorted(B + (j,)))
+                    Bij_tuple = tuple(sorted(B + (i, j)))
                     
-                    # Apply the interaction formula with weight
+                    vB = get_value(B_tuple)
+                    vBi = get_value(Bi_tuple)
+                    vBj = get_value(Bj_tuple)
+                    vBij = get_value(Bij_tuple)
+                    
+                    # Accumulate weighted interaction
                     total += weight * (vBij - vBi - vBj + vB)
-                    
+            
             interaction_matrix[i, j] = total
-            interaction_matrix[j, i] = total  # Ensure symmetry
+            interaction_matrix[j, i] = total
             
     return interaction_matrix
 

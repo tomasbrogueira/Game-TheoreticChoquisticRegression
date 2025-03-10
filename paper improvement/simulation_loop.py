@@ -22,7 +22,7 @@ from regression_classes import (
     compute_model_interactions
 )
 import mod_GenFuzzyRegression as modGF
-from simulation_helper_functions import get_feature_names, ensure_folder
+from simulation_helper_functions import get_feature_names, ensure_folder, compare_transformations
 
 
 def simulation(
@@ -184,14 +184,7 @@ def simulation(
                     scale_data=scale_data
                 )
                 X_sample = X_train[:min(3, len(X_train))]
-                transformed = transformer.fit_transform(X_sample)
-                transformed_matrices[method] = transformed
-                
-                print(f"  {method} transformation shape: {transformed.shape}")
-                if transformed.shape[1] > 0:
-                    print(f"  {method} first row sample: {transformed[0, :5]}")
-                    non_zeros = np.count_nonzero(transformed[0])
-                    print(f"  {method} non-zeros: {non_zeros}/{transformed.shape[1]} ({non_zeros/transformed.shape[1]:.2%})")
+                compare_transformations(X_sample)
             
             # Create model with unified scaling approach
             model = ChoquisticRegression(
@@ -217,22 +210,6 @@ def simulation(
                 "n_iter": n_iter
             })
         
-        # If we collected transformed matrices, verify they're different
-        if sim == 0 and len(transformed_matrices) >= 2:
-            methods_list = list(transformed_matrices.keys())
-            for i in range(len(methods_list)):
-                for j in range(i+1, len(methods_list)):
-                    method1 = methods_list[i]
-                    method2 = methods_list[j]
-                    mat1 = transformed_matrices[method1]
-                    mat2 = transformed_matrices[method2]
-                    
-                    if mat1.shape == mat2.shape:
-                        # Check if matrices are identical
-                        is_identical = np.allclose(mat1, mat2)
-                        print(f"VERIFICATION: {method1} and {method2} transformations are {'IDENTICAL' if is_identical else 'DIFFERENT'}")
-                        if is_identical:
-                            print("WARNING: This could explain identical accuracy results!")
 
             # Get the appropriate coalitions based on method
             if method.endswith("_2add"):
@@ -255,9 +232,22 @@ def simulation(
                 # Store Shapley values for plotting
                 if method == "choquet":
                     shapley_full.append(shapley_values)
-                    # For full Choquet, store direct coefficients as "marginal" values
-                    marginal_full.append(coef[0][:nAttr])
-                    sim_results[method]["marginal"] = coef[0][:nAttr]
+                    # Extract the  singleton coalition values
+                    marginal_values = []
+                    for i in range(nAttr):
+                        # Find the exact coalition in the coalition list
+                        try:
+                            singleton_idx = all_coalitions.index((i,))
+                            # Use direct v value (+1 for empty set)
+                            marginal_values.append(v[singleton_idx+1])
+                        except ValueError:
+                            # Fallback (shouldn't happen)
+                            marginal_values.append(coef[0][i])
+                    marginal_full.append(marginal_values)
+                    from simulation_helper_functions import verify_shapley_decomposition
+                    for feature_idx in range(min(5, nAttr)):  # Check first 5 features
+                        verify_shapley_decomposition(feature_idx, v, all_coalitions, nAttr)
+                    sim_results[method]["marginal"] = marginal_values
                 elif method == "choquet_2add":
                     # Compute Shapley values using model's method which returns a dictionary
                     shapley_result = model.compute_shapley_values()
@@ -441,30 +431,38 @@ def simulation(
         overall_method1 = 0.5 * np.sum(avg_interaction_matrix_full, axis=1)
         
         # Method 2: Difference between Shapley and marginal values
-        overall_method2 = avg_shapley_full - avg_marginal_full
-        
-        # Method 3: Average of pairwise interaction indices computed with compute_shapley_interaction_index
-        overall_method3 = np.zeros(nAttr)
-        
-        # Compute the average game parameter vector (v)
-        avg_v_full = np.mean(np.vstack([sim["coef"][0] for sim in all_sim_results["choquet"] if "coef" in sim]), axis=0)
-        avg_v_full = np.insert(avg_v_full, 0, 0.0)  # Insert 0 for empty set
-        
-        # Calculate average pairwise Shapley interaction indices
-        for j in range(nAttr):
-            pairwise_vals = []
-            for k in range(nAttr):
-                if k != j:
-                    # Compute the Shapley interaction index for the pair (j, k)
-                    idx_val = compute_shapley_interaction_index(avg_v_full, nAttr, coalitions_full, (j, k))
-                    pairwise_vals.append(idx_val)
-            overall_method3[j] = np.mean(pairwise_vals) if pairwise_vals else 0.0
+        overall_method2 = avg_shapley_full - avg_marginal_full 
+
+        # Right after calculating overall_method1 and overall_method2:
+        print("Matrix Method values:", overall_method1)
+        print("Shapley-Marginal values:", overall_method2)
+        print("Absolute difference:", np.abs(overall_method1 - overall_method2))
+
+        # Check where marginal_full is actually coming from
+        print("\nSingleton coalitions:")
+        for i in range(min(5, len(marginal_full[0]))): # Show first 5
+            print(f"Feature {i}: singleton value = {marginal_full[0][i]}")
+
+        # Verify calculation for a single feature
+        feature_idx = 0  # Check first feature
+        shapley_contribution = avg_shapley_full[feature_idx]
+        marginal_contribution = avg_marginal_full[feature_idx]
+        interaction_sum = 0.5 * np.sum(avg_interaction_matrix_full[feature_idx, :])
+
+        print(f"\nFor feature {feature_idx}:")
+        print(f"  Shapley value: {shapley_contribution}")
+        print(f"  Marginal/Singleton value: {marginal_contribution}")
+        print(f"  0.5 * Sum of interactions: {interaction_sum}")
+        print(f"  Shapley - Marginal: {shapley_contribution - marginal_contribution}")       
+
+        # Absolute interaction effect (captures interaction magnitude regardless of direction)
+        overall_method4 = 0.5 * np.sum(np.abs(avg_interaction_matrix_full), axis=1)
         
         # Plot the overall interaction indices for all three methods
         overall_dict = {
             "Matrix Method": overall_method1,
             "Shapley - Marginal": overall_method2,
-            "Average Pairwise": overall_method3
+            "Absolute Matrix Method": overall_method4
         }
         plot_overall_interaction(feature_names, overall_dict, "Overall Interaction Comparison", plot_folder)
 
