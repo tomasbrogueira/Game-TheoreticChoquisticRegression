@@ -141,14 +141,97 @@ def choquet_matrix(X_orig, all_coalitions=None):
             data_opt[i, idx] = diff
     return data_opt, all_coalitions
 
+def choquet_matrix_new(X_orig, k_add=None):
+    """
+    Unified implementation of the Choquet integral transformation matrix supporting k-additivity.
+    
+    This function strictly implements the Choquet integral as per Equation (22) in the paper:
+    f_CI(v, x_i) = Σ_{j=1}^{m} (x_{i,(j)} - x_{i,(j-1)}) * v({(j), ..., (m)})
+    
+    For k-additive models, it limits the coalition sizes to k and distributes values from larger
+    coalitions appropriately among smaller ones.
+    
+    Parameters:
+    -----------
+    X_orig : array-like of shape (n_samples, n_features)
+        Original feature matrix
+    k_add : int, optional
+        Maximum size of coalitions to consider. If None, full model is used (k=nAttr).
+        
+    Returns:
+    --------
+    tuple : (transformed feature matrix, list of all coalitions)
+    """
+    X_orig = np.array(X_orig)
+    nSamp, nAttr = X_orig.shape
+    
+    max_size = k_add if k_add is not None else nAttr
+    
+
+    all_coalitions = []
+    for r in range(1, min(max_size, nAttr) + 1):
+        all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
+    
+
+    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    data_opt = np.zeros((nSamp, len(all_coalitions)))
+    
+    # Implement equation (22) from the paper:
+    # f_CI(v, x_i) = Σ_{j=1}^{m} (x_{i,(j)} - x_{i,(j-1)}) * v({(j), ..., (m)})
+    for i in range(nSamp):
+        # Sort features in ascending order as required by the Choquet integral definition
+        order = np.argsort(X_orig[i])
+        sorted_vals = np.sort(X_orig[i])
+        prev = 0.0  # x_{i,(0)} is defined as 0
+        
+        for j in range(nAttr):
+            # Calculate the difference (x_{i,(j)} - x_{i,(j-1)})
+            diff = sorted_vals[j] - prev
+            prev = sorted_vals[j]
+            
+            # The coalition {(j), ..., (m)} in the formula
+            full_coalition = tuple(sorted(order[j:]))
+            
+            # Handle k-additive limitation:
+            if len(full_coalition) <= max_size:
+                # Direct assignment for coalitions within size limit
+                idx = coalition_to_index.get(full_coalition)
+                if idx is not None:
+                    data_opt[i, idx] = diff
+            else:
+                # For coalitions larger than k, we need to distribute the value
+                # to k-sized subsets according to the k-additivity principle
+                current_feature = order[j]
+                remaining_features = order[j+1:]
+                
+                if max_size > 0:  # Ensure we're not dealing with trivial case
+                    if len(remaining_features) >= max_size - 1:
+                        # We can form coalitions of size exactly max_size
+                        for subset in itertools.combinations(remaining_features, max_size - 1):
+                            coalition = tuple(sorted((current_feature,) + subset))
+                            idx = coalition_to_index.get(coalition)
+                            if idx is not None:
+                                # Distribute the difference with equal weights
+                                weight = 1.0 / comb(len(remaining_features), max_size - 1)
+                                data_opt[i, idx] += diff * weight
+                    else:
+                        # Use the largest possible coalition
+                        coalition = full_coalition
+                        idx = coalition_to_index.get(coalition)
+                        if idx is not None:
+                            data_opt[i, idx] += diff
+    
+    return data_opt, all_coalitions
 
 def choquet_matrix_2add(X_orig):
     """
-    Compute the 2-additive Choquet integral transformation.
+    Compute the 2-additive Choquet integral transformation according to equation (23).
     
-    In a 2-additive Choquet model, the capacity μ only has non-zero values
-    for singletons and pairs. The Choquet integral simplifies to:
-    C_μ(x) = Σ_i μ({i})*x_i + Σ_{i<j} I({i,j})*min(x_i, x_j)
+    In a 2-additive Choquet integral, the formula is:
+    f_CI(v, x_i) = ∑_j x_i,j(φ_j^S - (1/2)∑_{j'≠j} I_{j,j'}^S) + ∑_{j≠j'} (x_i,j ∧ x_i,j') I_{j,j'}^S
+    
+    This function implements the original formulation including the adjustment terms
+    as specified in equation (23) of the paper.
     
     Parameters:
     -----------
@@ -157,22 +240,25 @@ def choquet_matrix_2add(X_orig):
         
     Returns:
     --------
-    numpy.ndarray : Transformed feature matrix with:
-      - The original features (singletons)
-      - For each pair (i,j), the minimum value min(x_i, x_j)
+    numpy.ndarray : 2-additive Choquet integral basis transformation
     """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape
-    n_singletons = nAttr
-    n_pairs = comb(nAttr, 2)
-    data_opt = np.zeros((nSamp, n_singletons + n_pairs))
-    data_opt[:, :n_singletons] = X_orig
-    idx = n_singletons
+    k_add = 2
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
+        s = list(s)
+        coalit[i, s] = 1
+    data_opt = np.zeros((nSamp, k_add_numb))
     for i in range(nAttr):
-        for j in range(i + 1, nAttr):
-            data_opt[:, idx] = np.minimum(X_orig[:, i], X_orig[:, j])
-            idx += 1
-    return data_opt
+        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
+        for i2 in range(i+1, nAttr):
+            data_opt[:, (coalit[:, [i, i2]]==1).all(axis=1)] = (np.min([X_orig[:, i], X_orig[:, i2]], axis=0)).reshape(nSamp, 1)
+        for ii in range(nAttr+1, len(coalit)):
+            if coalit[ii, i] == 1:
+                data_opt[:, ii] = data_opt[:, ii] + (-1/2)*X_orig[:, i]
+    return data_opt[:, 1:]
 
 
 def mlm_matrix(X_orig):
@@ -220,11 +306,13 @@ def mlm_matrix(X_orig):
 
 def mlm_matrix_2add(X_orig):
     """
-    Compute the 2-additive multilinear model transformation.
+    Compute the 2-additive multilinear model transformation according to equation (25).
     
-    In a 2-additive MLM, we consider:
-    - Original features (singletons)
-    - Simple pairwise products
+    In a 2-additive MLM, the formula is:
+    f_ML(v, x_i) = ∑_j x_i,j(φ_j^B - (1/2)∑_{j'≠j} I_{j,j'}^B) + ∑_{j≠j'} x_i,j x_i,j' I_{j,j'}^B
+    
+    This function implements the original formulation including the adjustment terms
+    as specified in equation (25) of the paper.
     
     Parameters:
     -----------
@@ -237,21 +325,21 @@ def mlm_matrix_2add(X_orig):
     """
     X_orig = np.array(X_orig)
     nSamp, nAttr = X_orig.shape
-    n_singletons = nAttr
-    n_pairs = comb(nAttr, 2)
-    data_opt = np.zeros((nSamp, n_singletons + n_pairs))
-    
-    # Use original features for singletons
-    data_opt[:, :n_singletons] = X_orig
-    
-    # Calculate pairwise terms as simple products
-    idx = n_singletons
+    k_add = 2
+    k_add_numb = nParam_kAdd(k_add, nAttr)
+    coalit = np.zeros((k_add_numb, nAttr))
+    for i, s in enumerate(powerset(range(nAttr), k_add)):
+        s = list(s)
+        coalit[i, s] = 1
+    data_opt = np.zeros((nSamp, k_add_numb))
     for i in range(nAttr):
-        for j in range(i + 1, nAttr):
-            data_opt[:, idx] = X_orig[:, i] * X_orig[:, j]
-            idx += 1
-    
-    return data_opt
+        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
+        for i2 in range(i+1, nAttr):
+            data_opt[:, (coalit[:, [i, i2]]==1).all(axis=1)] = (X_orig[:, i] * X_orig[:, i2]).reshape(nSamp, 1)
+        for ii in range(nAttr+1, len(coalit)):
+            if coalit[ii, i] == 1:
+                data_opt[:, ii] = data_opt[:, ii] + (-1/2)*X_orig[:, i]
+    return data_opt[:, 1:]
 
 
 # =============================================================================
@@ -376,6 +464,13 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
             raise ValueError(f"X has {X.shape[1]} features, but ChoquetTransformer is expecting "
                             f"{self.n_features_in_} features.")
         
+
+        """
+        # New implementation for Choquet
+        if self.method.startswith("choquet"):
+            return choquet_matrix(X, self.k_add)[0]
+        """
+
         # Apply the selected transformation
         if self.method == "choquet":
             if not hasattr(self, "all_coalitions_"):
