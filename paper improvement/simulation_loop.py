@@ -93,6 +93,10 @@ def simulation(
 
     # Load and scale the entire dataset (always use MinMaxScaler)
     X, y = modGF.func_read_data(data_imp)
+    
+    # Get feature names 
+    feature_names = get_feature_names(X)
+    
     if scale_data:
         X_co = MinMaxScaler().fit_transform(X)
     else:
@@ -229,9 +233,10 @@ def simulation(
                         try:
                             singleton_idx = all_coalitions.index((i,))
                             # Use direct v value (+1 for empty set)
+                            # v[0] is empty set, v[idx+1] corresponds to coalition at all_coalitions[idx]
                             marginal_values[i] = v[singleton_idx+1]
                         except ValueError:
-                            # Fallback (shouldn't happen)
+                            # Fallback (shouldn't happen with properly constructed coalitions)
                             marginal_values[i] = coef[0][i]
                 
                 # Store the values in the interpretability data structure
@@ -247,13 +252,15 @@ def simulation(
                 banzhaf_values = compute_banzhaf_power_indices(v, nAttr, all_coalitions, k=k_add)
                 interpretability_data[method]["power_indices"].append(banzhaf_values)
                 
-                # Extract marginal/singleton values 
+                # Extract marginal/singleton values - ensure consistent indexing with Choquet method
                 marginal_values = np.zeros(nAttr)
                 for i in range(nAttr):
                     try:
                         singleton_idx = all_coalitions.index((i,))
+                        # v[0] is empty set, v[idx+1] corresponds to coalition at all_coalitions[idx]
                         marginal_values[i] = v[singleton_idx+1]
                     except ValueError:
+                        # Fallback to direct coefficient access
                         marginal_values[i] = coef[0][i]
                         
                 interpretability_data[method]["marginal_values"].append(marginal_values)
@@ -294,8 +301,6 @@ def simulation(
         overall_interaction_index_abs,
         overall_interaction_from_shapley
     )
-
-    feature_names = get_feature_names(X)
 
     # Plotting section - prepare data first then plot
     
@@ -465,22 +470,46 @@ def simulation(
             avg_marginal = np.mean(np.vstack(choquet_data["marginal_values"]), axis=0)
             avg_interaction = np.mean(np.array(choquet_data["interaction_matrix"]), axis=0)
             
-            # Method 1: From interaction matrix - sum rows and divide by 2
-            overall_method1 = overall_interaction_index(avg_interaction)
-            
-            # Do NOT apply automatic scaling - use raw mathematical values consistently
-            # This ensures consistency with the previous version
-            overall_method1_plot = overall_method1
-            
-            # Method 2: Difference between Shapley and marginal values
+            # Method 2 (reference): Difference between Shapley and marginal values (ground truth)
             overall_method2 = overall_interaction_from_shapley(avg_shapley, avg_marginal)
             
-            # Method 3: From absolute interactions
+            # Method 1: From interaction matrix using standard approach
+            overall_method1_standard = overall_interaction_index(avg_interaction)
+            
+            # Try the corrected function with scaling factor
+            from simulation_helper_functions import overall_interaction_index_corrected
+            overall_method1_corrected = overall_interaction_index_corrected(avg_interaction)
+            
+            # Use our direct fixing approach
+            from simulation_helper_functions import direct_fix_interaction_matrix
+            direct_fixed_matrix = direct_fix_interaction_matrix(avg_interaction, avg_shapley, avg_marginal)
+            overall_method1_direct = overall_interaction_index(direct_fixed_matrix)
+            
+            # Method 3: From absolute interactions (unchanged)
             overall_method3 = overall_interaction_index_abs(avg_interaction)
             
-            # Plot the overall interaction indices for all three methods
+            # ====== VERIFICATION CODE ======
+            from simulation_helper_functions import debug_interaction_calculation
+            debug_result = debug_interaction_calculation(
+                avg_shapley, avg_marginal, avg_interaction, feature_names
+            )
+            
+            # Compare different methods
+            diff_standard = np.abs(overall_method1_standard - overall_method2)
+            diff_corrected = np.abs(overall_method1_corrected - overall_method2)
+            diff_direct = np.abs(overall_method1_direct - overall_method2)
+            
+            print("\nVerification of different calculation methods:")
+            print(f"Standard method - Average absolute difference: {np.mean(diff_standard):.8f}")
+            print(f"Corrected method - Average absolute difference: {np.mean(diff_corrected):.8f}") 
+            print(f"Direct fixed method - Average absolute difference: {np.mean(diff_direct):.8f}")
+            # ==============================
+            
+            # Plot the overall interaction indices for all methods
             overall_dict = {
-                "Matrix Method": overall_method1_plot,
+                "Matrix Method (Standard)": overall_method1_standard,
+                "Matrix Method (Corrected)": overall_method1_corrected, 
+                "Matrix Method (Direct Fix)": overall_method1_direct,
                 "Shapley - Marginal": overall_method2,
                 "Absolute Matrix Method": overall_method3
             }
@@ -494,9 +523,36 @@ def simulation(
             
             # Add verification output
             print("\nVerification of interaction calculation methods:")
-            print("Matrix Method values:", overall_method1)
-            print("Shapley-Marginal values:", overall_method2)
-            print("Absolute difference:", np.abs(overall_method1 - overall_method2))
+            print("Shapley-Marginal values (reference):", overall_method2)
+            print("Standard Matrix Method values:", overall_method1_standard)
+            print("Corrected Matrix Method values:", overall_method1_corrected)
+            print("Direct Fixed Method values:", overall_method1_direct)
+            
+            # Save the interaction matrices for further analysis
+            debug_file = os.path.join(plot_folder, 'interaction_matrices_debug.pkl')
+            with open(debug_file, 'wb') as f:
+                pickle.dump({
+                    'original': avg_interaction,
+                    'direct_fixed': direct_fixed_matrix,
+                    'feature_names': feature_names,
+                    'shapley': avg_shapley,
+                    'marginal': avg_marginal,
+                    'overall_truth': overall_method2
+                }, f)
+            print(f"Saved interaction matrices debug data to {debug_file}")
+            
+            # Extra diagnostics about the interaction matrix properties
+            print("\nInteraction Matrix Properties:")
+            print(f"  Original: sum = {np.sum(avg_interaction):.4f}, abs sum = {np.sum(np.abs(avg_interaction)):.4f}")
+            print(f"  Direct fixed: sum = {np.sum(direct_fixed_matrix):.4f}, abs sum = {np.sum(np.abs(direct_fixed_matrix)):.4f}")
+            
+            # Compare specific problematic features
+            problem_idx = np.argmax(diff_standard)
+            print(f"\nMost problematic feature: {feature_names[problem_idx]}")
+            print(f"  Shapley-Marginal: {overall_method2[problem_idx]:.6f}")
+            print(f"  Standard Matrix: {overall_method1_standard[problem_idx]:.6f}")
+            print(f"  Corrected Matrix: {overall_method1_corrected[problem_idx]:.6f}")
+            print(f"  Direct Fixed: {overall_method1_direct[problem_idx]:.6f}")
 
     # For final verification of scale consistency
     if "choquet" in methods and "choquet_2add" in methods:

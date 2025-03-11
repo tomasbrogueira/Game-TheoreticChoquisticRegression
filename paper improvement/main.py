@@ -23,7 +23,7 @@ for dataset in datasets:
         baseline_max_iter=10000,
         penalty_lr=None,
         methods=["choquet_2add","choquet","mlm","mlm_2add"],
-        scale_data=False,
+        scale_data=True,
         plot_folder=dataset_folder,  # Pass the dataset-specific folder.
         results_filename=os.path.join(dataset_folder, "results.pkl"),
         log_odds_bins=30,

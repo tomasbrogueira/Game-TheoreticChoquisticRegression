@@ -7,6 +7,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.utils.validation import check_is_fitted, check_array
 from sklearn.utils.extmath import softmax  
+import warnings
 
 # =============================================================================
 # Utility functions for k-additive models
@@ -186,7 +187,7 @@ def mlm_matrix(X_orig):
     Parameters:
     -----------
     X_orig : array-like
-        Original feature matrix (should be scaled to [0,1])
+        Original feature matrix (must be scaled to [0,1] range by the caller)
         
     Returns:
     --------
@@ -201,6 +202,7 @@ def mlm_matrix(X_orig):
     # Assume X_orig is already properly scaled to [0,1] by caller
     for i, subset in enumerate(subsets):
         # Calculate product of selected features: Π_{i∈T} x_i
+        
         prod_x = np.prod(X_orig[:, list(subset)], axis=1)
         
         # Calculate product of complements: Π_{j∉T} (1-x_j)
@@ -275,7 +277,7 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
     For the multilinear model (MLM), the transformation computes basis functions:
     MLM(x) = Σ_{T⊆N} m(T) * Π_{i∈T} x_i * Π_{j∉T} (1-x_j)
     
-    For MLM methods, input features should be scaled to [0,1].
+    For MLM methods, input features should be scaled to [0,1] by the caller.
 
     Parameters
     ----------
@@ -289,15 +291,11 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         Additivity level for k-additive models. If not None and method is 
         "choquet" or "mlm", restricts to k-additive model. Ignored for 
         methods ending with "_2add".
-    scale_data : bool or None, default=None
-        Whether to scale input data to [0,1] range with MinMaxScaler.
-        If None, no scaling is applied.
     """
 
-    def __init__(self, method="choquet_2add", k_add=None, scale_data=None):
+    def __init__(self, method="choquet_2add", k_add=None):
         self.method = method
         self.k_add = k_add
-        self.scale_data = scale_data
         
         # Validate method
         valid_methods = ["choquet", "choquet_2add", "mlm", "mlm_2add"]
@@ -309,15 +307,12 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
             if not isinstance(k_add, int) or k_add < 1:
                 raise ValueError("k_add must be a positive integer")
             if method.endswith("_2add"):
-                import warnings
-                warnings.warn(f"k_add={k_add} is ignored for method='{method}'")
+                # Instead of warning, silently ignore since this is a common pattern
+                pass
+            elif k_add < 1:
+                raise ValueError(f"k_add must be at least 1, got {k_add}")
         
-        # Auto-recommend appropriate scaling for MLM methods
-        if method.startswith("mlm") and scale_data is None:
-            import warnings
-            warnings.warn("MLM methods expect input features in range [0,1]. "
-                         "Scaling is strongly recommended.")
-
+        
     def fit(self, X, y=None):
         """
         Fit the transformer by pre-computing necessary structures.
@@ -343,21 +338,11 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         # Store number of features for all methods
         self.n_features_in_ = X.shape[1]
         
-        # Initialize scaler if requested
-        if self.scale_data:
-            self.scaler_ = MinMaxScaler().fit(X)
-        
         # For Choquet, pre-compute coalition structure
         if self.method == "choquet":
-            # Transform X if scaling is requested
-            if self.scale_data:
-                X_scaled = self.scaler_.transform(X)
-            else:
-                X_scaled = X
-                
             if self.k_add is None:
                 # Full Choquet - all coalitions
-                _, all_coalitions = choquet_matrix(X_scaled)
+                _, all_coalitions = choquet_matrix(X)
             else:
                 # k-additive Choquet - coalitions up to size k
                 all_coalitions = []
@@ -374,7 +359,7 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         Parameters
         ----------
         X : array-like of shape (n_samples, n_features)
-            Input data to transform.
+            Input data to transform. For MLM methods, should already be scaled to [0,1].
             
         Returns
         -------
@@ -391,29 +376,23 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
             raise ValueError(f"X has {X.shape[1]} features, but ChoquetTransformer is expecting "
                             f"{self.n_features_in_} features.")
         
-        # Apply scaling if configured
-        if self.scale_data:
-            X_scaled = self.scaler_.transform(X)
-        else:
-            X_scaled = X
-        
         # Apply the selected transformation
         if self.method == "choquet":
             if not hasattr(self, "all_coalitions_"):
                 raise AttributeError("Transformer not properly fitted. Call fit() before transform().")
-            X_trans, _ = choquet_matrix(X_scaled, all_coalitions=self.all_coalitions_)
+            X_trans, _ = choquet_matrix(X, all_coalitions=self.all_coalitions_)
             return X_trans
             
         elif self.method == "choquet_2add":
-            return choquet_matrix_2add(X_scaled)
+            return choquet_matrix_2add(X)
             
         elif self.method == "mlm":
             if self.k_add is not None:
                 raise NotImplementedError("k-additive MLM not yet implemented")
-            return mlm_matrix(X_scaled)
+            return mlm_matrix(X)
             
         elif self.method == "mlm_2add":
-            return mlm_matrix_2add(X_scaled)
+            return mlm_matrix_2add(X)
             
         else:
             # This should never happen due to validation in __init__
@@ -575,11 +554,10 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         else:
             X_scaled = X
             
-        # Create transformer with correct parameters
+        # Create transformer with correct parameters (no scale_data parameter)
         self.transformer_ = ChoquetTransformer(
             method=self.method, 
-            k_add=self.k_add,
-            scale_data=None  # We already scaled the data
+            k_add=self.k_add
         )
         X_transformed = self.transformer_.fit_transform(X_scaled)
         
@@ -817,11 +795,10 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         # Initialize LogisticRegression with given parameters
         super().__init__(**kwargs)
         
-        # Create transformer
+        # Create transformer (no scale_data parameter)
         self.transformer_ = ChoquetTransformer(
             method=self.method, 
-            k_add=self.k_add,
-            scale_data=None  # We'll handle scaling separately
+            k_add=self.k_add
         )
         
         # Validate method
@@ -1293,7 +1270,7 @@ def compute_shapley_values(v, m, all_coalitions, k=None):
     def get_value(coalition):
         """Get coalition value with memoization"""
         if not coalition:
-            return 0.0  # Empty set has value 0
+            return 0.0  # Empty set
         
         # Check cache first
         if coalition in coalition_values:
@@ -1369,8 +1346,14 @@ def compute_banzhaf_power_indices(v, m, all_coalitions, k=None):
         
         if k is None or len(coalition) <= k:
             try:
-                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
-            except (KeyError, IndexError):
+                # Simplified and fixed lookup pattern
+                if coalition in coalition_to_index:
+                    idx = coalition_to_index[coalition]
+                    value = v[idx + 1]  # +1 for empty set at v[0]
+                else:
+                    value = 0.0
+            except (KeyError, IndexError) as e:
+                print(f"Warning: Index error for coalition {coalition}: {e}")
                 value = 0.0
         else:
             value = compute_capacity_value(coalition, v, all_coalitions, k)
@@ -1460,13 +1443,17 @@ def compute_banzhaf_interaction_matrix(v, m, all_coalitions, k=None):
             return coalition_values[coalition]
         
         if k is None:
-            # For full model, direct lookup or 0
             try:
-                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
-            except (KeyError, IndexError):
+                # Simplified and fixed lookup pattern
+                if coalition in coalition_to_index:
+                    idx = coalition_to_index[coalition] 
+                    value = v[idx + 1]  # +1 for empty set at v[0]
+                else:
+                    value = 0.0
+            except (KeyError, IndexError) as e:
+                print(f"Warning: Index error for coalition {coalition}: {e}")
                 value = 0.0
         else:
-            # For k-additive model, reconstruct the value
             value = compute_capacity_value(coalition, v, all_coalitions, k)
         coalition_values[coalition] = value
         return value
@@ -1608,7 +1595,7 @@ def compute_model_interactions(v, m, all_coalitions, model_type="mlm", k=None):
     
     def get_value(coalition):
         """Get coalition value with memoization"""
-        if not coalition:  # Empty set
+        if not coalition:
             return 0.0
             
         if coalition in coal_values:
@@ -1616,8 +1603,14 @@ def compute_model_interactions(v, m, all_coalitions, model_type="mlm", k=None):
             
         if k is None:
             try:
-                value = v[coalition_to_index[coalition]] if coalition in coalition_to_index else 0.0
-            except (KeyError, IndexError):
+                # Simplified and fixed lookup pattern
+                if coalition in coalition_to_index:
+                    idx = coalition_to_index[coalition]
+                    value = v[idx + 1]  # +1 for empty set at v[0]
+                else:
+                    value = 0.0
+            except (KeyError, IndexError) as e:
+                print(f"Warning: Index error for coalition {coalition}: {e}")
                 value = 0.0
         else:
             value = compute_capacity_value(coalition, v, all_coalitions, k)
@@ -1680,7 +1673,7 @@ def compute_model_interactions(v, m, all_coalitions, model_type="mlm", k=None):
                         Bi = tuple(sorted(B + (i,)))
                         Bj = tuple(sorted(B + (j,)))
                         Bij = tuple(sorted(B + (i, j)))
-                        
+
                         interaction_matrix[i, j] += get_value(Bij) - get_value(Bi) - get_value(Bj) + get_value(B)
                 
                 interaction_matrix[i, j] /= norm_interaction
@@ -1761,13 +1754,17 @@ def compute_shapley_interaction_index(v, m, all_coalitions, A, k=None):
             
         # Calculate and cache the value
         if k is None:
-            # For full model, direct lookup or 0
             try:
-                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
-            except (KeyError, IndexError):
+                # Simplified and fixed lookup pattern
+                if coalition in coalition_to_index:
+                    idx = coalition_to_index[coalition]
+                    value = v[idx + 1]  # +1 for empty set at v[0]
+                else:
+                    value = 0.0
+            except (KeyError, IndexError) as e:
+                print(f"Warning: Index error for coalition {coalition}: {e}")
                 value = 0.0
         else:
-            # For k-additive model, reconstruct the value
             value = compute_capacity_value(coalition, v, all_coalitions, k)
             
         coalition_values[coalition] = value
@@ -1846,13 +1843,17 @@ def compute_banzhaf_interaction_index(v, m, all_coalitions, A, k=None):
             
         # Calculate and cache the value
         if k is None:
-            # For full model, direct lookup or 0
             try:
-                value = v[coalition_to_index.get(coalition, -1)] if coalition in coalition_to_index else 0.0
-            except (KeyError, IndexError):
+                # Simplified and fixed lookup pattern
+                if coalition in coalition_to_index:
+                    idx = coalition_to_index[coalition]
+                    value = v[idx + 1]  # +1 for empty set at v[0]
+                else:
+                    value = 0.0
+            except (KeyError, IndexError) as e:
+                print(f"Warning: Index error for coalition {coalition}: {e}")
                 value = 0.0
         else:
-            # For k-additive model, reconstruct the value
             value = compute_capacity_value(coalition, v, all_coalitions, k)
             
         coalition_values[coalition] = value
