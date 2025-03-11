@@ -21,10 +21,10 @@ for dataset in datasets:
         n_simulations=2,  # You can set a higher number of simulation runs.
         solver_lr="newton-cg",
         baseline_max_iter=10000,
-        penalty_lr=None,
+        penalty_lr='l2',
         methods=["choquet_2add","choquet","mlm","mlm_2add"],
         scale_data=True,
-        plot_folder=dataset_folder,  # Pass the dataset-specific folder.
+        plot_folder=dataset_folder,  
         results_filename=os.path.join(dataset_folder, "results.pkl"),
         log_odds_bins=30,
     )
