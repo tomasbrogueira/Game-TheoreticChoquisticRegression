@@ -183,8 +183,7 @@ def interaction_shapley_ratio(shapley_values, interaction_matrix, all_coalitions
     Returns:
         np.array: ISR per feature ∈ [0, 1], where 0 = no interaction, 1 = all interaction.
     """
-    # In our Choquet model the coefficient vector contains both singleton and interaction values.
-    # Use only singleton Shapley contributions (first m elements) for computing the ratio.
+
     if shapley_values.shape[0] != m:
         tsc = np.abs(shapley_values[:m])
     else:
