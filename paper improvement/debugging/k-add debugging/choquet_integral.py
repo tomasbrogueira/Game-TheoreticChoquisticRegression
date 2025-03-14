@@ -30,7 +30,7 @@ def powerset(iterable, k_add):
     return chain.from_iterable(combinations(s, r) for r in range(0, k_add + 1))
 
 
-def choquet_matrix_new(X_orig, k_add=None):
+def choquet_matrix(X_orig, k_add=None):
     """
     Unified implementation of the Choquet integral transformation matrix supporting k-additivity.
     
