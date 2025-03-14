@@ -91,10 +91,8 @@ def simulation(
 
     ensure_folder(plot_folder)
 
-    # Load and scale the entire dataset (always use MinMaxScaler)
     X, y = modGF.func_read_data(data_imp)
     
-    # Get feature names 
     feature_names = get_feature_names(X)
     
     if scale_data:
@@ -102,20 +100,16 @@ def simulation(
     else:
         X_co = X
 
-    # Compute the coalitions only once for the full Choquet model.
     from regression_classes import choquet_matrix
     _, coalitions_full = choquet_matrix(X_co)
 
-    # Initialize dictionary to store coalitions for different k values
     k_add_coalitions = {}
     nAttr = X.shape[1]
     
-    # Create a more structured data storage approach
     all_sim_results = {}
     for method in ["LR"] + methods:
         all_sim_results[method] = []
     
-    # Structured storage for interpretability measures
     interpretability_data = {
         method: {
             "power_indices": [],        # Shapley for choquet, Banzhaf for MLM
@@ -163,13 +157,7 @@ def simulation(
             k_add = extract_k_value(method)
             choq_params = choq_logistic_params.copy()
             choq_params["random_state"] = sim_seed
-            
-            # For verification/debugging purposes
-            if sim == 0 and len(X_train) > 0:
-                X_sample = X_train[:min(3, len(X_train))]
-                compare_transformations(X_sample)
-            
-            # Create model with unified scaling approach
+
             model = ChoquisticRegression(
                 method=method,
                 k_add=k_add, 
@@ -183,8 +171,7 @@ def simulation(
             n_iter = model.n_iter_
             
             print(f"  {method} Train Acc: {train_acc:.4f}, Test Acc: {test_acc:.4f}")
-            
-            # Store basic performance metrics
+
             sim_results[method] = {
                 "train_acc": train_acc, 
                 "test_acc": test_acc,
@@ -194,12 +181,9 @@ def simulation(
             
             # Get the appropriate coalitions based on method
             if k_add is not None:
-                # Create coalitions for this k value if not already computed
                 if k_add not in k_add_coalitions:
                     k_add_coalitions[k_add] = []
-                    # Add individual attributes
                     k_add_coalitions[k_add].extend([(i,) for i in range(nAttr)])
-                    # Add all combinations up to size k
                     for size in range(2, k_add + 1):
                         k_add_coalitions[k_add].extend([tuple(sorted(combo)) for combo in itertools.combinations(range(nAttr), size)])
                 
@@ -207,52 +191,38 @@ def simulation(
             else:
                 all_coalitions = coalitions_full
 
-            # Extract capacity values from the model (with 0 for empty set)
-            # For LogisticRegression, coef_ is a 2D array (n_classes-1, n_features)
             v = np.insert(coef[0], 0, 0.0)
             
-            # Compute interpretability measures based on method type - ENSURE CONSISTENCY WITH ORIGINAL VERSION
             if method.startswith("choquet"):
-                # First try to use model's optimized calculation method for any Choquet variant
                 try:
                     shapley_result = model.compute_shapley_values()
                     
                     if isinstance(shapley_result, dict) and "shapley" in shapley_result:
-                        # Use model's optimized calculation if available
                         shapley_values = shapley_result["shapley"]
                         marginal_values = shapley_result["marginal"]
                     else:
-                        # If result is not in expected format, use general calculation
                         raise AttributeError("Invalid format from compute_shapley_values()")
                 except (AttributeError, NotImplementedError):
-                    # Fall back to direct computation if optimization fails or not implemented
                     shapley_values = compute_shapley_values(v, nAttr, all_coalitions, k=k_add)
-                    # Extract the singleton coalition values consistently
                     marginal_values = np.zeros(nAttr)
                     for i in range(nAttr):
                         try:
                             singleton_idx = all_coalitions.index((i,))
-                            # Use direct v value (+1 for empty set)
                             # v[0] is empty set, v[idx+1] corresponds to coalition at all_coalitions[idx]
                             marginal_values[i] = v[singleton_idx+1]
                         except ValueError:
-                            # Fallback (shouldn't happen with properly constructed coalitions)
                             marginal_values[i] = coef[0][i]
                 
-                # Store the values in the interpretability data structure
                 interpretability_data[method]["power_indices"].append(shapley_values)
                 interpretability_data[method]["marginal_values"].append(marginal_values)
                 
-                # Compute interaction matrix - USE DIRECT COMPUTATION FOR CONSISTENCY
                 interaction_matrix = compute_choquet_interaction_matrix(v, nAttr, all_coalitions, k=k_add)
                 interpretability_data[method]["interaction_matrix"].append(interaction_matrix)
                 
             elif method.startswith("mlm"):
-                # Compute Banzhaf power indices - USE DIRECT COMPUTATION FOR CONSISTENCY
                 banzhaf_values = compute_banzhaf_power_indices(v, nAttr, all_coalitions, k=k_add)
                 interpretability_data[method]["power_indices"].append(banzhaf_values)
                 
-                # Extract marginal/singleton values - ensure consistent indexing with Choquet method
                 marginal_values = np.zeros(nAttr)
                 for i in range(nAttr):
                     try:
@@ -260,12 +230,10 @@ def simulation(
                         # v[0] is empty set, v[idx+1] corresponds to coalition at all_coalitions[idx]
                         marginal_values[i] = v[singleton_idx+1]
                     except ValueError:
-                        # Fallback to direct coefficient access
                         marginal_values[i] = coef[0][i]
                         
                 interpretability_data[method]["marginal_values"].append(marginal_values)
                 
-                # Compute Banzhaf interaction matrix - USE DIRECT COMPUTATION FOR CONSISTENCY
                 interaction_matrix = compute_banzhaf_interaction_matrix(v, nAttr, all_coalitions, k=k_add)
                 interpretability_data[method]["interaction_matrix"].append(interaction_matrix)
             
