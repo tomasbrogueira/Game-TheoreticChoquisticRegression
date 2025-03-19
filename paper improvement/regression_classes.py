@@ -92,6 +92,63 @@ def choquet_matrix(X_orig, all_coalitions=None):
             data_opt[i, idx] = diff
     return data_opt, all_coalitions
 
+def choquet_matrix_kadd_guilherme(X_orig, kadd):
+    """
+    Compute the Choquet integral transformation matrix restricted to coalitions
+    of maximum size kadd.
+
+    Parameters
+    ----------
+    X_orig : array-like, shape (n_samples, n_attributes)
+        The input data.
+    kadd : int
+        Maximum coalition size allowed.
+
+    Returns
+    -------
+    data_opt : ndarray, shape (n_samples, num_allowed_coalitions)
+        The Choquet integral matrix using allowed coalitions.
+
+    Raises
+    ------
+    ValueError
+        If kadd is greater than the number of features in X_orig.
+    """
+    nSamp, nAttr = X_orig.shape
+    if kadd > nAttr:
+        raise ValueError(f"kadd ({kadd}) cannot be greater than the number of features ({nAttr}).")
+
+    # Sort data row-wise and pad with zeros to compute successive differences
+    X_orig_sort = np.sort(X_orig, axis=1)
+    X_orig_sort_ind = np.argsort(X_orig, axis=1)
+    X_orig_sort_ext = np.concatenate((np.zeros((nSamp, 1)), X_orig_sort), axis=1)
+
+    max_coal_size = kadd
+    num_coalitions = sum(comb(nAttr, r) for r in range(1, max_coal_size + 1))
+
+    sequence = np.arange(nAttr)
+    combin = 99 * np.ones((num_coalitions, nAttr), dtype=int)
+    count = 0
+    for r in range(1, max_coal_size + 1):
+        combos = list(itertools.combinations(sequence, r))
+        for i, combo in enumerate(combos):
+            combin[count + i, :r] = combo
+        count += len(combos)
+
+    data_opt = np.zeros((nSamp, num_coalitions))
+    # Only compute differences corresponding to allowed coalition sizes
+    start_idx = nAttr - max_coal_size
+    for jj in range(nSamp):
+        for ii in range(start_idx, nAttr):
+            coalition = np.concatenate((np.sort(X_orig_sort_ind[jj, ii:]), 99 * np.ones(ii, dtype=int)), axis=0).tolist()
+            try:
+                aux = combin.tolist().index(coalition)
+            except ValueError:
+                continue
+            data_opt[jj, aux] = X_orig_sort_ext[jj, ii + 1] - X_orig_sort_ext[jj, ii]
+
+    return data_opt
+
 def choquet_matrix_new(X_orig, k_add=None):
     """
     Unified implementation of the Choquet integral transformation matrix supporting k-additivity.
