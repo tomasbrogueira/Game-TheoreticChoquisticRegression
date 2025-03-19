@@ -27,7 +27,7 @@ def powerset(iterable, k_add):
     iterable : All subsets of the input up to size k_add
     """
     s = list(iterable)
-    return chain.from_iterable(combinations(s, r) for r in range(0, k_add + 1))
+    return chain.from_iterable(combinations(s, r) for r in range(k_add + 1))
 
 
 def choquet_matrix(X_orig, k_add=None):
@@ -163,7 +163,7 @@ def choquet_matrix_2add(X_orig):
     nSamp, nAttr = X_orig.shape # Number of samples (train) and attrbiutes
     
     k_add = 2
-    k_add_numb = nParam_kAdd(k_add,nAttr)
+    k_add_numb = int(nParam_kAdd(nAttr,k_add))
     
     coalit = np.zeros((k_add_numb,nAttr))
     
@@ -209,7 +209,7 @@ def convert_representations(X, from_standard=True, k_add=2):
         raise ValueError("Currently conversion is only supported for k_add=2")
         
     # Get both representations
-    standard_matrix, coalitions = choquet_matrix(X, k_add=k_add)
+    standard_matrix, coalitions = choquet_matrix_kadd_guilherme(X, k_add=k_add)
     shapley_matrix = choquet_matrix_2add(X)
     
     if from_standard:
