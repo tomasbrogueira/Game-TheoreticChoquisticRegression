@@ -22,6 +22,12 @@ from regression_classes import (
     compute_banzhaf_interaction_index,
     compute_model_interactions
 )
+from complexity_functions import (
+    compute_model_complexities,
+    plot_complexity_results,
+    analyze_scaling_behavior,
+    plot_scaling_behavior
+)
 import mod_GenFuzzyRegression as modGF
 from simulation_helper_functions import get_feature_names, ensure_folder, compare_transformations, extract_k_value
 
@@ -119,6 +125,12 @@ def simulation(
             "predicted_probs": []       # For visualization
         } for method in methods
     }
+
+    # Prepare results for complexity analysis
+    complexity_results = {
+        sim: {
+        } for sim in range(n_simulations)
+    }
     
     for sim in range(n_simulations):
         sim_results = {}
@@ -151,6 +163,12 @@ def simulation(
         sim_results["LR"] = {"train_acc": baseline_train_acc, "test_acc": baseline_test_acc,
                              "coef": lr_baseline.coef_, "n_iter": lr_baseline.n_iter_}
         
+
+        # calculate complexity metrics for LR
+        complexity_results[sim].update(compute_model_complexities(
+            [lr_baseline], X_train_base, y_train, X_test_base, labels=["LR"]
+        ))
+
         # Process each method
         for method in methods:
             print("Processing method:", method)
@@ -178,6 +196,11 @@ def simulation(
                 "coef": coef.copy(), 
                 "n_iter": n_iter
             }
+
+            # calculate complexity metrics for the model
+            complexity_results[sim].update(
+                compute_model_complexities([model], X_train, y_train, X_test, labels=[method])
+            )
             
             # Get the appropriate coalitions based on method
             if k_add is not None:
@@ -559,28 +582,84 @@ def simulation(
             )
             model_ch2add.fit(X_train, y_train)
             plot_decision_boundary(X_train, y_train, model_ch2add, join(plot_folder, "boundary_choq.png"))
-    
+
+
+    aggregated_complexity = {}
+
+    model_names = []
+    for sim in complexity_results:
+        for model in complexity_results[sim].keys():
+            if model not in model_names:
+                model_names.append(model)
+
+    # Aggregate metrics for each model
+    for model_name in model_names:
+        aggregated_complexity[model_name] = {}
+        
+        train_times = []
+        train_stds = []
+        pred_times = []
+        pred_stds = []
+        memory_usages = []
+        
+        for sim in complexity_results:
+            if model_name in complexity_results[sim]:
+                model_data = complexity_results[sim][model_name]
+                if "train_time" in model_data: train_times.append(model_data["train_time"])
+                if "train_std" in model_data: train_stds.append(model_data["train_std"])
+                if "pred_time" in model_data: pred_times.append(model_data["pred_time"])
+                if "pred_std" in model_data: pred_stds.append(model_data["pred_std"])
+                if "memory_mb" in model_data: memory_usages.append(model_data["memory_mb"])
+        
+        if train_times: aggregated_complexity[model_name]["train_time"] = np.mean(train_times)
+        else: aggregated_complexity[model_name]["train_time"] = 0
+        
+        if train_stds: aggregated_complexity[model_name]["train_std"] = np.mean(train_stds)
+        else: aggregated_complexity[model_name]["train_std"] = 0
+        
+        if pred_times: aggregated_complexity[model_name]["pred_time"] = np.mean(pred_times)
+        else: aggregated_complexity[model_name]["pred_time"] = 0
+        
+        if pred_stds: aggregated_complexity[model_name]["pred_std"] = np.mean(pred_stds)
+        else: aggregated_complexity[model_name]["pred_std"] = 0
+        
+        if memory_usages: aggregated_complexity[model_name]["memory_mb"] = np.mean(memory_usages)
+        else: aggregated_complexity[model_name]["memory_mb"] = 0
+
+    # Plot aggregated complexity across all simulations
+    fig = plot_complexity_results(aggregated_complexity, title="Average Model Complexity Across Simulations")
+    fig.savefig(os.path.join(plot_folder, "complexity_comparison_avg.png"))
+
+    # Plot individual simulation complexity
+    idx = np.random.randint(0, n_simulations)
+    if idx in complexity_results and complexity_results[idx]:
+        fig_sim = plot_complexity_results(complexity_results[idx], title=f"Model Complexity (Simulation {idx+1})")
+        fig_sim.savefig(os.path.join(plot_folder, f"complexity_comparison_sim{idx+1}.png"))
+    else:
+        print(f"Could not find complexity data for simulation {idx+1}.")
+
+
+
     # Package final results
     final_results = {
         "simulations": all_sim_results,
         "interpretability": interpretability_data
     }
-    
-    # Save results to pickle file - ensure it's saved in the dataset folder
-    # Extract only the filename part if a path was provided
+
+    # Save results to pickle file
     results_filename_only = os.path.basename(results_filename)
     if not results_filename_only.endswith('.pkl'):
         results_filename_only = "results.pkl"
-    
+
     # Always save in the dataset-specific plot folder
     results_path = os.path.join(plot_folder, results_filename_only)
-    
+
     # Make sure directory exists
     ensure_folder(os.path.dirname(results_path))
-    
+
     print(f"\nSaving simulation results to {results_path}")
     with open(results_path, 'wb') as f:
         pickle.dump(final_results, f)
     print("Results saved successfully.")
-    
+
     return final_results
