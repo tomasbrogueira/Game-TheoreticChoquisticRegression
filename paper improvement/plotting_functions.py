@@ -69,118 +69,107 @@ def plot_marginal_2add(feature_names, all_marginal_2add, plot_folder):
     )
     print("Saved marginal contributions plot to:", filename)
 
-def plot_coef_full(X, mean_coef_full, plot_folder, model_type="choquet"):
+def plot_coef(X_or_feature_names, mean_coef, plot_folder, model_type="choquet", k_add=None, intercept=None):
     """
-    Plot coefficients for the full model (Choquet or MLM).
+    Plot coefficients for any k-additive model (Choquet or MLM).
     
     Parameters:
     -----------
-    X : array-like
-        Original feature matrix (used to determine number of features)
-    mean_coef_full : array-like
+    X_or_feature_names : array-like or list
+        Either the feature matrix (for full models) or feature names list (for k-additive)
+    mean_coef : array-like
         Average coefficient values across simulations
     plot_folder : str
         Directory to save the plot
     model_type : str, default="choquet"
         Type of model: "choquet" or "mlm"
+    k_add : int, default=None
+        If None, plot full model coefficients. Otherwise, plot k-additive model coefficients.
+    intercept : float, default=None
+        The bias/intercept term to include in the plot
     """
-    if mean_coef_full is None or mean_coef_full.size == 0:
-        print(f"No full {model_type} regression coefficients computed; skipping plot.")
+    model_desc = f"{k_add}-add" if k_add else "full"
+    if mean_coef is None or mean_coef.size == 0:
+        print(f"No {model_type} {model_desc} regression coefficients computed; skipping plot.")
         return
-    
-    # Generate coalitions
-    nAttr = X.shape[1]
-    all_coalitions = []
-    for r in range(1, nAttr + 1):
-        all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
-    
-    # Generate labels for features based on model type
-    coalition_labels = []
-    if model_type.lower() == "choquet":
-        coalition_labels = [",".join(f"{i+1}" for i in coalition) for coalition in all_coalitions]
-        color = "gray"
-        title = "Average Regression Coefficients for All Coalitions (Full Choquet)"
-        filename = "coef_full.png"
-    else:  # MLM
-        for coalition in all_coalitions:
-            label_parts = []
-            # Add the active features
-            active_parts = [f"{i+1}" for i in coalition]
-            label_parts.append(",".join(active_parts))
-            # Add complement features if not full set
-            if len(coalition) < nAttr:
-                complement_parts = [f"¬{i+1}" for i in range(nAttr) if i not in coalition]
-                if complement_parts:
-                    label_parts.append(",".join(complement_parts))
-            coalition_labels.append(" × ".join(label_parts))
-        color = "cornflowerblue"
-        title = "Average Regression Coefficients (Full MLM Model)"
-        filename = "coef_mlm_full.png"
-    
-    # Sort and plot
-    indices_sorted = np.argsort(np.abs(mean_coef_full))[::-1]
-    sorted_labels = np.array(coalition_labels)[indices_sorted]
-    sorted_values = mean_coef_full[indices_sorted]
-    
-    fig_height = max(6, len(sorted_labels) * 0.15)
-    plt.figure(figsize=(10, fig_height))
-    plt.barh(sorted_labels, sorted_values, color=color, edgecolor="black")
-    plt.xlabel("Regression Coefficient")
-    plt.title(title)
-    plt.gca().invert_yaxis()
-    plt.tight_layout()
-    plot_path = join(plot_folder, filename)
-    plt.savefig(plot_path)
-    plt.close()
-    print(f"Saved {model_type} regression coefficients plot to:", plot_path)
 
-def plot_coef_2add(feature_names, mean_coef_2add, plot_folder, model_type="choquet"):
-    """
-    Plot coefficients for the 2-additive model (Choquet or MLM).
+    if isinstance(X_or_feature_names, list) or (hasattr(X_or_feature_names, 'ndim') and X_or_feature_names.ndim == 1):
+        feature_names = X_or_feature_names
+        n_features = len(feature_names)
+    else:
+        X = X_or_feature_names
+        n_features = X.shape[1]
+        feature_names = [f"Feature {i+1}" for i in range(n_features)]
     
-    Parameters:
-    -----------
-    feature_names : list
-        Names of the features
-    mean_coef_2add : array-like
-        Average coefficient values across simulations
-    plot_folder : str
-        Directory to save the plot
-    model_type : str, default="choquet"
-        Type of model: "choquet" or "mlm"
-    """
-    if mean_coef_2add is None or mean_coef_2add.size == 0:
-        print(f"No {model_type} 2-add regression coefficients computed; skipping plot.")
-        return
-    
-    n_features = len(feature_names)
-    singleton_labels = feature_names
-    interaction_labels = []
-    
-    # Generate pair labels based on model type
-    for i in range(n_features):
-        for j in range(i+1, n_features):
-            if model_type.lower() == "choquet":
-                interaction_labels.append(f"{feature_names[i]},{feature_names[j]}")
-            else:  # MLM
-                interaction_labels.append(f"{feature_names[i]}×{feature_names[j]}")
-    
-    # Set style based on model type
+    # Set style based on model type and k-additivity
     if model_type.lower() == "choquet":
         color = "gray"
-        title = "Average Regression Coefficients (Choquet 2-add Model)"
-        filename = "coef_2add.png"
+        if k_add is None:
+            title = "Average Regression Coefficients (Choquet Model)"
+            filename = "coef_full.png"
+        else:
+            title = f"Average Regression Coefficients (Choquet {k_add}-add Model)"
+            filename = f"coef_{k_add}add.png"
     else:  # MLM
         color = "cornflowerblue"
-        title = "Average Regression Coefficients (MLM 2-add Model)"
-        filename = "coef_mlm_2add.png"
+        if k_add is None:
+            title = "Average Regression Coefficients (MLM Model)"
+            filename = "coef_mlm_full.png"
+        else:
+            title = f"Average Regression Coefficients (MLM {k_add}-add Model)"
+            filename = f"coef_mlm_{k_add}add.png"
     
-    # Sort and plot
-    all_labels = np.array(list(singleton_labels) + interaction_labels)
-    indices_sorted = np.argsort(np.abs(mean_coef_2add))[::-1]
+    # Generate all coalition labels up to size k (or all if k is None)
+    all_labels = []
+    if k_add:
+        singleton_labels = feature_names
+        interaction_labels = []
+        
+        # Add singletons
+        all_labels.extend(singleton_labels)
+        
+        # Add interaction terms for k > 1
+        if k_add > 1:
+            for r in range(2, k_add + 1):
+                for combo in itertools.combinations(range(n_features), r):
+                    if model_type.lower() == "choquet":
+                        interaction_labels.append(",".join(feature_names[i] for i in combo))
+                    else:  # MLM
+                        interaction_labels.append("×".join(feature_names[i] for i in combo))
+            all_labels.extend(interaction_labels)
+    else:
+        all_coalitions = []
+        for r in range(1, n_features + 1):
+            all_coalitions.extend(list(itertools.combinations(range(n_features), r)))
+        
+        if model_type.lower() == "choquet":
+            all_labels = [",".join(feature_names[i] for i in coalition) for coalition in all_coalitions]
+        else:
+            for coalition in all_coalitions:
+                label_parts = []
+                # Add active features
+                active_parts = [feature_names[i] for i in coalition]
+                label_parts.append(",".join(active_parts))
+                # Add complement features if not full set
+                if len(coalition) < n_features:
+                    complement_parts = [f"¬{feature_names[i]}" for i in range(n_features) if i not in coalition]
+                    if complement_parts:
+                        label_parts.append(",".join(complement_parts))
+                all_labels.append(" × ".join(label_parts))
+    
+    # Add bias
+    coef_values = mean_coef.copy()
+    if intercept is not None:
+        all_labels = ["Bias"] + list(all_labels)
+        coef_values = np.insert(coef_values, 0, intercept)
+    
+    # Sort by absolute value
+    all_labels = np.array(all_labels)
+    indices_sorted = np.argsort(np.abs(coef_values))[::-1]
     sorted_labels = all_labels[indices_sorted]
-    sorted_values = mean_coef_2add[indices_sorted]
+    sorted_values = coef_values[indices_sorted]
     
+    # Create plot
     fig_height = max(6, len(sorted_labels) * 0.15)
     plt.figure(figsize=(10, fig_height))
     plt.barh(sorted_labels, sorted_values, color=color, edgecolor="black")
@@ -191,7 +180,10 @@ def plot_coef_2add(feature_names, mean_coef_2add, plot_folder, model_type="choqu
     plot_path = join(plot_folder, filename)
     plt.savefig(plot_path)
     plt.close()
-    print(f"Saved {model_type} 2-add regression coefficients plot to:", plot_path)
+    
+    print(f"Saved {model_type} {model_desc} regression coefficients plot to:", plot_path)
+    
+    print(f"Saved {model_type} {model_desc} regression coefficients plot to:", plot_path)
 
 def plot_interaction_matrix(X, feature_names, all_interaction_matrices, plot_folder, method):
     if not all_interaction_matrices:

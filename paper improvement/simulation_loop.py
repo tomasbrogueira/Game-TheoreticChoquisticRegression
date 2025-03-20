@@ -160,8 +160,13 @@ def simulation(
         print("Baseline LR Train Acc: {:.2%}, Test Acc: {:.2%}, n_iter: {}".format(
             baseline_train_acc, baseline_test_acc, lr_baseline.n_iter_
         ))
-        sim_results["LR"] = {"train_acc": baseline_train_acc, "test_acc": baseline_test_acc,
-                             "coef": lr_baseline.coef_, "n_iter": lr_baseline.n_iter_}
+        sim_results["LR"] = {
+            "train_acc": baseline_train_acc, 
+            "test_acc": baseline_test_acc,
+            "coef": lr_baseline.coef_, 
+            "intercept": lr_baseline.intercept_[0] if hasattr(lr_baseline, 'intercept_') else None,
+            "n_iter": lr_baseline.n_iter_
+        }
         
 
         # calculate complexity metrics for LR
@@ -194,6 +199,7 @@ def simulation(
                 "train_acc": train_acc, 
                 "test_acc": test_acc,
                 "coef": coef.copy(), 
+                "intercept": model.intercept_[0] if hasattr(model, 'intercept_') else None,
                 "n_iter": n_iter
             }
 
@@ -273,8 +279,7 @@ def simulation(
     # ---------------- Plotting ----------------
     from plotting_functions import (
         plot_shapley_full,
-        plot_coef_full,
-        plot_coef_2add,
+        plot_coef,
         plot_shapley_2add,
         plot_marginal_2add,
         plot_interaction_matrix,
@@ -318,11 +323,21 @@ def simulation(
             interaction_array = np.array(interpretability_data[method]["interaction_matrix"])
             plot_data[method]["interaction_matrix_avg"] = np.mean(interaction_array, axis=0)
         
-        # Model coefficients
+        # Model coefficients and intercept
         if method in all_sim_results and all_sim_results[method]:
             coef_values = [sim["coef"] for sim in all_sim_results[method] if "coef" in sim]
             if coef_values:
                 plot_data[method]["coef_avg"] = np.mean(np.vstack(coef_values), axis=0)
+                plot_data[method]["coef_std"] = np.std(np.vstack(coef_values), axis=0)
+                
+                # Get intercepts if available
+                intercepts = [sim["intercept"] for sim in all_sim_results[method] if "intercept" in sim and sim["intercept"] is not None]
+                if intercepts:
+                    plot_data[method]["intercept_avg"] = np.mean(intercepts)
+                    plot_data[method]["intercept_std"] = np.std(intercepts)
+
+        
+
     
     # 2. Now use the aggregated data for plotting
     
@@ -366,14 +381,30 @@ def simulation(
         if "coef_avg" not in plot_data.get(method, {}):
             continue
             
-        if method == "choquet":
-            plot_coef_full(X, plot_data[method]["coef_avg"], plot_folder, model_type="choquet")
-        elif method == "choquet_2add":
-            plot_coef_2add(feature_names, plot_data[method]["coef_avg"], plot_folder, model_type="choquet")
-        elif method == "mlm":
-            plot_coef_full(X, plot_data[method]["coef_avg"], plot_folder, model_type="mlm")
-        elif method == "mlm_2add":
-            plot_coef_2add(feature_names, plot_data[method]["coef_avg"], plot_folder, model_type="mlm")
+        # Get the average intercept from plot_data
+        intercept = plot_data[method].get("intercept_avg", None)
+        
+        # Extract model type and k-additivity from method name
+        model_type = "choquet" if method.startswith("choquet") else "mlm"
+        k_add = None
+        if "_" in method:
+            k_part = method.split("_")[1]
+            if k_part.endswith("add"):
+                k_add = int(k_part.replace("add", ""))
+        
+        # Use either X or feature_names depending on k_add
+        X_or_names = feature_names if k_add else X
+        
+        # Call the unified plot function
+        from plotting_functions import plot_coef
+        plot_coef(
+            X_or_names, 
+            plot_data[method]["coef_avg"], 
+            plot_folder, 
+            model_type=model_type, 
+            k_add=k_add, 
+            intercept=intercept
+        )
     
     # Plot interaction matrices for all methods
     for method in methods:
