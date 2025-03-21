@@ -7,6 +7,7 @@ from results_processing import results_processing
 datasets = ["transfusion"]
 #datasets = ["mammographic"]
 #datasets = ['dados_covid_sbpo_atual']
+#datasets = ['diabetes']
 
 for dataset in datasets:
     # Create a dataset-specific folder inside the "plots" folder.
@@ -21,7 +22,7 @@ for dataset in datasets:
         n_simulations=2,  # You can set a higher number of simulation runs.
         solver_lr="newton-cg",
         baseline_max_iter=10000,
-        penalty_lr='l2',
+        penalty_lr=None,
         methods=["choquet_2add","choquet","mlm","mlm_2add"],
         scale_data=True,
         plot_folder=dataset_folder,  
