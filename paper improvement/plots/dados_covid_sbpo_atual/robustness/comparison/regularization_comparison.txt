@@ -1,0 +1,53 @@
+REGULARIZATION IMPACT ON MODEL ROBUSTNESS
+=======================================
+
+MODEL: LR
+--------------------------------------------------
+Metric               | No Regularization | L2 Regularization | Difference (L2 - None)
+--------------------------------------------------------------------------------
+Baseline Accuracy    | 0.6842           | 0.6842          | +0.0000 WORSE
+Noise Robustness (max noise) | 0.4979           | 0.4979          | +0.0000 WORSE
+Bootstrap Stability (std) | 0.0038           | 0.0038          | +0.0000 WORSE
+Feature Dropout Impact | 0.1175           | 0.1175          | +0.0000 WORSE
+
+
+MODEL: choquet_2add
+--------------------------------------------------
+Metric               | No Regularization | L2 Regularization | Difference (L2 - None)
+--------------------------------------------------------------------------------
+Baseline Accuracy    | 0.6858           | 0.6858          | +0.0000 WORSE
+Noise Robustness (max noise) | 0.5004           | 0.5004          | +0.0000 WORSE
+Bootstrap Stability (std) | 0.0039           | 0.0039          | +0.0000 WORSE
+Feature Dropout Impact | 0.1047           | 0.1047          | +0.0000 WORSE
+
+
+MODEL: choquet
+--------------------------------------------------
+Metric               | No Regularization | L2 Regularization | Difference (L2 - None)
+--------------------------------------------------------------------------------
+Baseline Accuracy    | 0.6909           | 0.6910          | +0.0001 BETTER
+Noise Robustness (max noise) | 0.5001           | 0.4997          | -0.0003 WORSE
+Bootstrap Stability (std) | 0.0039           | 0.0038          | -0.0000 BETTER
+Feature Dropout Impact | 0.1351           | 0.1342          | -0.0009 BETTER
+
+
+MODEL: mlm
+--------------------------------------------------
+Metric               | No Regularization | L2 Regularization | Difference (L2 - None)
+--------------------------------------------------------------------------------
+Baseline Accuracy    | 0.6909           | 0.6910          | +0.0001 BETTER
+Noise Robustness (max noise) | 0.5001           | 0.4997          | -0.0003 WORSE
+Bootstrap Stability (std) | 0.0039           | 0.0038          | -0.0000 BETTER
+Feature Dropout Impact | 0.1351           | 0.1342          | -0.0009 BETTER
+
+
+MODEL: mlm_2add
+--------------------------------------------------
+Metric               | No Regularization | L2 Regularization | Difference (L2 - None)
+--------------------------------------------------------------------------------
+Baseline Accuracy    | 0.6858           | 0.6858          | +0.0000 WORSE
+Noise Robustness (max noise) | 0.5004           | 0.5004          | +0.0000 WORSE
+Bootstrap Stability (std) | 0.0039           | 0.0039          | +0.0000 WORSE
+Feature Dropout Impact | 0.1047           | 0.1047          | +0.0000 WORSE
+
+

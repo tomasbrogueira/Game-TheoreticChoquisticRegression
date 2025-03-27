@@ -1,0 +1,117 @@
+MODEL ROBUSTNESS TEST RESULTS
+=============================
+
+Baseline Performance:
+--------------------------------------------------
+LR:
+  - Accuracy: 0.6842
+  - ROC AUC:  0.7305
+  - F1 Score: 0.6747
+choquet_2add:
+  - Accuracy: 0.6858
+  - ROC AUC:  0.7326
+  - F1 Score: 0.6862
+choquet:
+  - Accuracy: 0.6909
+  - ROC AUC:  0.7376
+  - F1 Score: 0.6956
+mlm:
+  - Accuracy: 0.6909
+  - ROC AUC:  0.7376
+  - F1 Score: 0.6956
+mlm_2add:
+  - Accuracy: 0.6858
+  - ROC AUC:  0.7326
+  - F1 Score: 0.6862
+
+Noise Robustness (Accuracy):
+--------------------------------------------------
+Noise Level | LR | choquet_2add | choquet | mlm | mlm_2add
+0.05        | 0.6658 | 0.6678 | 0.6660 | 0.6660 | 0.6678 | 
+0.10        | 0.6454 | 0.6463 | 0.6407 | 0.6407 | 0.6463 | 
+0.20        | 0.6090 | 0.6083 | 0.5977 | 0.5977 | 0.6083 | 
+0.30        | 0.5743 | 0.5738 | 0.5644 | 0.5644 | 0.5738 | 
+0.50        | 0.4979 | 0.5004 | 0.5001 | 0.5001 | 0.5004 | 
+
+Feature Importance (Top 5 via Permutation):
+--------------------------------------------------
+LR:
+  1. PerdaOlfato: 0.1613
+  2. Febre: 0.0039
+  3. Mialgia: 0.0038
+  4. DorGarganta: 0.0031
+  5. Coriza: 0.0010
+
+choquet_2add:
+  1. PerdaOlfato: 0.1571
+  2. Febre: 0.0111
+  3. DorGarganta: 0.0041
+  4. Mialgia: 0.0011
+  5. Enjoo: 0.0011
+
+choquet:
+  1. PerdaOlfato: 0.1471
+  2. Febre: 0.0297
+  3. DorGarganta: 0.0155
+  4. Coriza: 0.0127
+  5. Tosse: 0.0092
+
+mlm:
+  1. PerdaOlfato: 0.1471
+  2. Febre: 0.0297
+  3. DorGarganta: 0.0155
+  4. Coriza: 0.0127
+  5. Tosse: 0.0092
+
+mlm_2add:
+  1. PerdaOlfato: 0.1571
+  2. Febre: 0.0111
+  3. DorGarganta: 0.0041
+  4. Mialgia: 0.0011
+  5. Enjoo: 0.0011
+
+Feature Dropout Summary (3 features):
+--------------------------------------------------
+LR:
+  - Baseline:   0.6842
+  - With drops: 0.6038
+  - % Change:   11.75%
+choquet_2add:
+  - Baseline:   0.6858
+  - With drops: 0.6139
+  - % Change:   10.47%
+choquet:
+  - Baseline:   0.6909
+  - With drops: 0.5975
+  - % Change:   13.51%
+mlm:
+  - Baseline:   0.6909
+  - With drops: 0.5975
+  - % Change:   13.51%
+mlm_2add:
+  - Baseline:   0.6858
+  - With drops: 0.6139
+  - % Change:   10.47%
+
+Bootstrap Stability:
+--------------------------------------------------
+LR:
+  - Accuracy: 0.6835 ± 0.0038
+  - ROC AUC:  0.7300 ± 0.0042
+  - F1 Score: 0.6743 ± 0.0045
+choquet_2add:
+  - Accuracy: 0.6853 ± 0.0039
+  - ROC AUC:  0.7321 ± 0.0042
+  - F1 Score: 0.6861 ± 0.0045
+choquet:
+  - Accuracy: 0.6906 ± 0.0039
+  - ROC AUC:  0.7372 ± 0.0043
+  - F1 Score: 0.6958 ± 0.0046
+mlm:
+  - Accuracy: 0.6906 ± 0.0039
+  - ROC AUC:  0.7372 ± 0.0043
+  - F1 Score: 0.6958 ± 0.0046
+mlm_2add:
+  - Accuracy: 0.6853 ± 0.0039
+  - ROC AUC:  0.7321 ± 0.0042
+  - F1 Score: 0.6861 ± 0.0045

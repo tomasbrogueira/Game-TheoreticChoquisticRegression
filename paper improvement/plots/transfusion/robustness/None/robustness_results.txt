@@ -1,0 +1,112 @@
+MODEL ROBUSTNESS TEST RESULTS
+=============================
+
+Baseline Performance:
+--------------------------------------------------
+LR:
+  - Accuracy: 0.7149
+  - ROC AUC:  0.7458
+  - F1 Score: 0.7234
+choquet_2add:
+  - Accuracy: 0.7061
+  - ROC AUC:  0.7403
+  - F1 Score: 0.7173
+choquet:
+  - Accuracy: 0.7061
+  - ROC AUC:  0.7397
+  - F1 Score: 0.7173
+mlm:
+  - Accuracy: 0.7061
+  - ROC AUC:  0.7549
+  - F1 Score: 0.6912
+mlm_2add:
+  - Accuracy: 0.6974
+  - ROC AUC:  0.7504
+  - F1 Score: 0.7039
+
+Noise Robustness (Accuracy):
+--------------------------------------------------
+Noise Level | LR | choquet_2add | choquet | mlm | mlm_2add
+0.05        | 0.7105 | 0.7018 | 0.7018 | 0.7149 | 0.7149 | 
+0.10        | 0.7149 | 0.6974 | 0.6798 | 0.7105 | 0.7281 | 
+0.20        | 0.7018 | 0.6930 | 0.6579 | 0.7018 | 0.7237 | 
+0.30        | 0.6798 | 0.6930 | 0.6404 | 0.6842 | 0.7105 | 
+0.50        | 0.6667 | 0.6667 | 0.6228 | 0.6667 | 0.6754 | 
+
+Feature Importance (Top 5 via Permutation):
+--------------------------------------------------
+LR:
+  1. Monetary (c.c. blood): 0.1491
+  2. Recency (months): 0.1206
+  3. Time (months): 0.0689
+  4. Frequency (times): 0.0000
+
+choquet_2add:
+  1. Recency (months): 0.1360
+  2. Time (months): 0.0583
+  3. Frequency (times): 0.0276
+  4. Monetary (c.c. blood): 0.0276
+
+choquet:
+  1. Recency (months): 0.1373
+  2. Frequency (times): 0.0627
+  3. Monetary (c.c. blood): 0.0627
+  4. Time (months): 0.0588
+
+mlm:
+  1. Time (months): 0.0899
+  2. Recency (months): 0.0662
+  3. Frequency (times): 0.0548
+  4. Monetary (c.c. blood): 0.0548
+
+mlm_2add:
+  1. Recency (months): 0.0680
+  2. Time (months): 0.0465
+  3. Frequency (times): 0.0360
+  4. Monetary (c.c. blood): 0.0360
+
+Feature Dropout Summary (1 features):
+--------------------------------------------------
+LR:
+  - Baseline:   0.7149
+  - With drops: 0.6013
+  - % Change:   15.89%
+choquet_2add:
+  - Baseline:   0.7061
+  - With drops: 0.6539
+  - % Change:   7.39%
+choquet:
+  - Baseline:   0.7061
+  - With drops: 0.6447
+  - % Change:   8.70%
+mlm:
+  - Baseline:   0.7061
+  - With drops: 0.6623
+  - % Change:   6.21%
+mlm_2add:
+  - Baseline:   0.6974
+  - With drops: 0.6575
+  - % Change:   5.72%
+
+Bootstrap Stability:
+--------------------------------------------------
+LR:
+  - Accuracy: 0.7104 ± 0.0340
+  - ROC AUC:  0.7442 ± 0.0381
+  - F1 Score: 0.7194 ± 0.0380
+choquet_2add:
+  - Accuracy: 0.7035 ± 0.0346
+  - ROC AUC:  0.7388 ± 0.0383
+  - F1 Score: 0.7148 ± 0.0389
+choquet:
+  - Accuracy: 0.7035 ± 0.0346
+  - ROC AUC:  0.7377 ± 0.0386
+  - F1 Score: 0.7148 ± 0.0389
+mlm:
+  - Accuracy: 0.7075 ± 0.0319
+  - ROC AUC:  0.7549 ± 0.0355
+  - F1 Score: 0.6922 ± 0.0368
+mlm_2add:
+  - Accuracy: 0.6937 ± 0.0347
+  - ROC AUC:  0.7495 ± 0.0366
+  - F1 Score: 0.7008 ± 0.0393

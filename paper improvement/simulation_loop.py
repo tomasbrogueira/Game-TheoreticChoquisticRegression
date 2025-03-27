@@ -31,6 +31,7 @@ from complexity_functions import (
 )
 import mod_GenFuzzyRegression as modGF
 from simulation_helper_functions import get_feature_names, ensure_folder, compare_transformations, extract_k_value
+from robustness import test_model_robustness, compare_regularization_robustness
 
 def simulation(
     data_imp="dados_covid_sbpo_atual",
@@ -298,6 +299,124 @@ def simulation(
         # Append the results from this simulation
         for key, result in sim_results.items():
             all_sim_results[key].append(result)
+
+
+
+    # ---------------- Analysis ----------------
+
+    final_results = {
+        "simulations": {},
+        "interpretability": {},
+        "robustness": {}
+    }
+
+    # --------------- Robustness Testing ----------------
+    print("\nPerforming robustness analysis...")
+
+    robustness_models_none = {}
+    robustness_models_l2 = {}
+
+    # 1. No regularization
+    baseline_params_none = baseline_logistic_params.copy()
+    baseline_params_none["random_state"] = random_state
+    baseline_params_none["penalty"] = None
+    lr_robustness_none = LogisticRegression(**baseline_params_none)
+    lr_robustness_none.fit(X_train, y_train)
+    robustness_models_none["LR"] = lr_robustness_none
+
+    # 2. L2 regularization
+    baseline_params_l2 = baseline_logistic_params.copy()
+    baseline_params_l2["random_state"] = random_state
+    baseline_params_l2["penalty"] = "l2"
+    baseline_params_l2["C"] = 1.0  # Standard L2 strength
+    lr_robustness_l2 = LogisticRegression(**baseline_params_l2)
+    lr_robustness_l2.fit(X_train, y_train)
+    robustness_models_l2["LR"] = lr_robustness_l2
+
+    # Train one model of each type for robustness testing (both unregularized and L2)
+    for method in methods:
+        print(f"Training {method} models for robustness testing (None and L2)...")
+        k_add = extract_k_value(method)
+        
+        # 1. No regularization
+        choq_params_none = choq_logistic_params.copy()
+        choq_params_none["random_state"] = random_state
+        choq_params_none["penalty"] = None
+        
+        model_none = ChoquisticRegression(
+            method=method,
+            k_add=k_add,
+            scale_data=scale_data,
+            **choq_params_none
+        )
+        model_none.fit(X_train, y_train)
+        robustness_models_none[method] = model_none
+        
+        # 2. L2 regularization
+        choq_params_l2 = choq_logistic_params.copy()
+        choq_params_l2["random_state"] = random_state
+        choq_params_l2["penalty"] = "l2"
+        choq_params_l2["C"] = 1.0  # Standard L2 strength
+        
+        model_l2 = ChoquisticRegression(
+            method=method,
+            k_add=k_add,
+            scale_data=scale_data,
+            **choq_params_l2
+        )
+        model_l2.fit(X_train, y_train)
+        robustness_models_l2[method] = model_l2
+
+    output_folder_none = os.path.join(plot_folder, "robustness", "None")
+    output_folder_l2 = os.path.join(plot_folder, "robustness", "L2")
+
+    print("\nTesting robustness of models WITHOUT regularization...")
+    robustness_results_none = test_model_robustness(
+        models=robustness_models_none,
+        X_test=X_test,
+        y_test=y_test,
+        feature_names=feature_names,
+        noise_levels=[0.05, 0.1, 0.2, 0.3, 0.5],
+        n_permutations=10,
+        feature_dropout_count=max(1, X.shape[1] // 3),
+        n_bootstrap_samples=100,
+        bootstrap_size=0.8,
+        output_folder=output_folder_none,
+        random_state=random_state
+    )
+
+    print("\nTesting robustness of models WITH L2 regularization...")
+    robustness_results_l2 = test_model_robustness(
+        models=robustness_models_l2,
+        X_test=X_test,
+        y_test=y_test,
+        feature_names=feature_names,
+        noise_levels=[0.05, 0.1, 0.2, 0.3, 0.5],
+        n_permutations=10,
+        feature_dropout_count=max(1, X.shape[1] // 3),
+        n_bootstrap_samples=100,
+        bootstrap_size=0.8,
+        output_folder=output_folder_l2,
+        random_state=random_state
+    )
+
+    robustness_results = {
+        "None": robustness_results_none,
+        "L2": robustness_results_l2
+    }
+
+    final_results["robustness"] = robustness_results
+
+    comparison_folder = os.path.join(plot_folder, "robustness", "comparison")
+
+    compare_regularization_robustness(
+        robustness_results_none,
+        robustness_results_l2,
+        comparison_folder
+    )
+
+    print("Robustness comparison completed. See results in:", comparison_folder)
+
 
     # ---------------- Plotting ----------------
     from plotting_functions import (
