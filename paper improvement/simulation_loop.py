@@ -26,11 +26,11 @@ from complexity_functions import (
     compute_model_complexities,
     plot_complexity_results,
     analyze_scaling_behavior,
-    plot_scaling_behavior
+    plot_scaling_behavior,
+    measure_model_energy_and_flops
 )
 import mod_GenFuzzyRegression as modGF
 from simulation_helper_functions import get_feature_names, ensure_folder, compare_transformations, extract_k_value
-
 
 def simulation(
     data_imp="dados_covid_sbpo_atual",
@@ -174,6 +174,17 @@ def simulation(
             [lr_baseline], X_train_base, y_train, X_test_base, labels=["LR"]
         ))
 
+        # FLOPS and energy consumption
+        flops, energy, runtime, is_estimated = measure_model_energy_and_flops(
+            lr_baseline, X_test_base
+        )
+        complexity_results[sim]["LR"].update({
+            "flops": flops,
+            "energy_uj": energy,
+            "pred_runtime": runtime,
+            "is_estimated": is_estimated
+        })
+
         # Process each method
         for method in methods:
             print("Processing method:", method)
@@ -207,6 +218,18 @@ def simulation(
             complexity_results[sim].update(
                 compute_model_complexities([model], X_train, y_train, X_test, labels=[method])
             )
+
+            # Add FLOPS and energy consumption for this method
+            flops, energy, runtime, is_estimated = measure_model_energy_and_flops(
+                model, X_test
+            )
+            # Store the energy and FLOPS results in the complexity dictionary
+            complexity_results[sim][method].update({
+                "flops": flops,
+                "energy_uj": energy, 
+                "pred_runtime": runtime,
+                "is_estimated": is_estimated
+            })
             
             # Get the appropriate coalitions based on method
             if k_add is not None:
