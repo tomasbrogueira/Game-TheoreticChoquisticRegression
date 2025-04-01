@@ -5,14 +5,23 @@ from scipy.optimize import minimize
 X = np.array([[0.2, 0.5, 0.8], [0.1, 0.4, 0.9]])
 y = np.array([1, 0])
 
+# Obtained coefficients 
+#f1 = np.array([0.2, 0.5, 0.8, 0.2, 0.2, 0.5])
+#f2 = np.array([0.1, 0.4, 0.9, 0.1, 0.1, 0.4])
+#matrix = np.array([f1, f2])
+
+f1 = np.array([0.2, 0.5, 0.8, -0.15, -0.3, -0.15])
+f2 = np.array([0.1, 0.4, 0.9, -0.15, -0.4, -0.25])
+matrix = np.array([f1, f2])
+
 # Define the loss function
-def loss(params):
+def loss(params, matrix=matrix, y=y):
     phi1, phi2, phi3, I12, I13, I23 = params
     
-    # Compute f_CI for each sample
-    f1 = 0.2*phi1 + 0.5*phi2 + 0.8*phi3 - 0.15*I12 - 0.3*I13 - 0.15*I23
-    f2 = 0.1*phi1 + 0.4*phi2 + 0.9*phi3 - 0.15*I12 - 0.4*I13 - 0.25*I23
-    
+    # Compute f_CI for each sample by multiplying the matrix with the parameters one by one
+    f1 = matrix[0] @ np.array([phi1, phi2, phi3, I12, I13, I23])
+    f2 = matrix[1] @ np.array([phi1, phi2, phi3, I12, I13, I23])
+
     # Sigmoid probabilities
     p1 = 1 / (1 + np.exp(-f1))
     p2 = 1 / (1 + np.exp(-f2))

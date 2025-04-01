@@ -462,10 +462,13 @@ for ll in range(len(data_imp)):
     X_choquet_alt = choquet_matrix_2add_alt(X_small)
     X_choquet_orig = choquet_matrix_2add(X_small)
     X_choquet_refined = choquet_k_additive(X_small, k_add=k_add)
+    X_choquet_game = game_choquet_k_additive(X_small, k_add=k_add)
     print("Alt 2-add Choquet:")
     print(X_choquet_alt)
     print("Original 2-add Choquet:")
     print(X_choquet_orig)
     print("Refined Choquet without empty set:")
     print(X_choquet_refined)
+    print("Game Choquet without empty set:")
+    print(X_choquet_game)
 
