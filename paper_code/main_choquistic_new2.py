@@ -507,6 +507,59 @@ if len(param_choquet_train) > 0:
     plt.savefig(shapely_plot_path)
     plt.close()
     print("Saved Shapley values plot to:", shapely_plot_path)
+    
+    # Plot all coefficients of the full Choquet model
+    # Create a list of all non-empty subsets for labels
+    subset_labels = []
+    sequence = np.arange(nAttr)
+    for i in range(1, nAttr+1):
+        for combo in itertools.combinations(sequence, i):
+            # Create a readable label for each subset
+            subset_name = ', '.join([feature_names[idx] for idx in combo])
+            subset_labels.append(subset_name)
+    
+    # Sort coefficients by their absolute value for better visualization
+    coef_idx_sorted = np.argsort(np.abs(game_params_avg))[::-1]
+    sorted_coefs = game_params_avg[coef_idx_sorted]
+    sorted_labels = [subset_labels[i] for i in coef_idx_sorted]
+    
+    # Create two plots: one for the top 20 coefficients by magnitude
+    # and another for all coefficients
+    
+    # Plot 1: Top 20 coefficients (or fewer if there are less than 20)
+    num_top_coefs = min(20, len(sorted_coefs))
+    plt.figure(figsize=(12, 10))
+    bars = plt.barh(range(num_top_coefs), sorted_coefs[:num_top_coefs], color='blue', edgecolor='black')
+    # Color bars based on sign
+    for i, bar in enumerate(bars):
+        if sorted_coefs[i] < 0:
+            bar.set_color('red')
+    plt.yticks(range(num_top_coefs), sorted_labels[:num_top_coefs], fontsize=12)
+    plt.xlabel('Coefficient Value', fontsize=16)
+    plt.title('Top 20 Coefficients of Full Choquet Model (by magnitude)', fontsize=18)
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    top_coefs_path = os.path.join("plots", "top_choquet_coefficients.png")
+    plt.savefig(top_coefs_path)
+    plt.close()
+    print("Saved top Choquet coefficients plot to:", top_coefs_path)
+    
+    # Plot 2: All coefficients
+    plt.figure(figsize=(15, max(10, len(sorted_coefs)//3)))
+    bars = plt.barh(range(len(sorted_coefs)), sorted_coefs, color='blue', edgecolor='black')
+    # Color bars based on sign
+    for i, bar in enumerate(bars):
+        if sorted_coefs[i] < 0:
+            bar.set_color('red')
+    plt.yticks(range(len(sorted_coefs)), sorted_labels, fontsize=8)
+    plt.xlabel('Coefficient Value', fontsize=16)
+    plt.title('All Coefficients of Full Choquet Model (by magnitude)', fontsize=18)
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    all_coefs_path = os.path.join("plots", "all_choquet_coefficients.png")
+    plt.savefig(all_coefs_path)
+    plt.close()
+    print("Saved all Choquet coefficients plot to:", all_coefs_path)
 
 
 #covid_param = param_choquet_kadd_train[700:]
@@ -572,22 +625,42 @@ sequence = np.arange(nAttr)
 combin = np.array(list(itertools.combinations(sequence, 2)))
 covid_param_inter_mean = np.mean(param_values, axis=0)[9:]
 
+# Create a plot for interaction effects - safely handling when there aren't enough parameters
 plot_aux = np.zeros((nAttr, nAttr))
-for ll in range(combin.shape[0]):
-    plot_aux[combin[ll, 0], combin[ll, 1]] = covid_param_inter_mean[ll]
-plot_aux = plot_aux + plot_aux.T
 
-plt.figure(figsize=(8, 6))
-plt.imshow(plot_aux)
-plt.colorbar(orientation="vertical")
-pos = np.arange(len(feature_names))
-plt.yticks(pos, feature_names)
-plt.xticks(pos, feature_names, rotation=90)
-plt.title("Interaction effects among symptoms")
-interaction_plot_path = os.path.join("plots", "interaction_effects.png")
-plt.savefig(interaction_plot_path)
+# Only process as many combinations as we have parameters for
+max_interactions = min(combin.shape[0], len(covid_param_inter_mean))
+if max_interactions > 0:
+    for ll in range(max_interactions):
+        plot_aux[combin[ll, 0], combin[ll, 1]] = covid_param_inter_mean[ll]
+    plot_aux = plot_aux + plot_aux.T
+
+    plt.figure(figsize=(8, 6))
+    plt.imshow(plot_aux)
+    plt.colorbar(orientation="vertical")
+    pos = np.arange(len(names))  # Use 'names' instead of 'feature_names'
+    plt.yticks(pos, names)
+    plt.xticks(pos, names, rotation=90)
+    plt.title("Interaction effects among symptoms")
+    interaction_plot_path = os.path.join("plots", "interaction_effects.png")
+    plt.savefig(interaction_plot_path)
+    plt.close()
+    print("Saved interaction effects plot to:", interaction_plot_path)
+else:
+    print("Not enough interaction parameters to create the interaction effects plot")
+
+# Plot coefficients of the Choquet model
+plt.figure(figsize=(10, 8))
+plt.bar(range(len(covid_param_mean)), covid_param_mean, yerr=covid_param_std, color='blue', edgecolor='black')
+plt.xticks(range(len(covid_param_mean)), names, rotation=45, ha='right')
+plt.xlabel('Symptoms')
+plt.ylabel('Coefficient Value')
+plt.title('Choquet Model Coefficients')
+plt.tight_layout()
+plt.grid(axis='y')
+plt.savefig('choquet_coefficients.png')
 plt.close()
-print("Saved interaction effects plot to:", interaction_plot_path)
+
 
 # Interpreting odds change
 # aa = pd.DataFrame([1,1,0,0,1,0,0,0,0]).T
