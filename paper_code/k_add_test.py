@@ -7,9 +7,11 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, roc_auc_score
 import mod_GenFuzzyRegression as mGFR
-from choquet_function import choquet_matrix_kadd_guilherme, choquet_matrix_2add
+from choquet_function import choquet_matrix_2add
+from original_test import choquet_k_additive_game, choquet_k_additive_mobius
+from math import comb
 
-def refined_choquet_k_additive(X_orig, k_add=2):
+def dif_aggregation_k_additive_game(X_orig, k_add=2):
     """Refined implementation of k-additive Choquet integral transformation."""
     X_orig = np.asarray(X_orig)
     nSamp, nAttr = X_orig.shape
@@ -61,7 +63,7 @@ def refined_choquet_k_additive(X_orig, k_add=2):
     
     return transformed
 
-def plot_model_coefficients(model, feature_names, coalition_labels, plot_title, filename, max_features=50):
+def plot_model_coefficients(model, feature_names, coalition_labels, plot_title, filename, dataset_name, max_features=50):
     """Plot the coefficients of a model."""
     coef = model.coef_[0]
     
@@ -92,11 +94,13 @@ def plot_model_coefficients(model, feature_names, coalition_labels, plot_title, 
     plt.grid(axis='x', linestyle='--', alpha=0.7)
     plt.tight_layout()
     
-    # Ensure plots directory exists
-    os.makedirs("plots", exist_ok=True)
-    plt.savefig(os.path.join("plots", filename))
+    # Ensure dataset-specific directory exists
+    plot_dir = os.path.join("plots", dataset_name)
+    os.makedirs(plot_dir, exist_ok=True)
+    
+    plt.savefig(os.path.join(plot_dir, filename))
     plt.close()
-    print(f"Saved coefficient plot to: plots/{filename}")
+    print(f"Saved coefficient plot to: plots/{dataset_name}/{filename}")
 
 def generate_coalition_labels(feature_names, max_k):
     """Generate labels for all possible feature coalitions up to size max_k."""
@@ -107,17 +111,27 @@ def generate_coalition_labels(feature_names, max_k):
             coalition_labels.append(label)
     return coalition_labels
 
-def comprehensive_covid_test():
-    """Comprehensive test of all implementations on the COVID dataset"""
-    print("=== Comprehensive COVID-19 Dataset Test ===\n")
+def comprehensive_dataset_test(dataset_file, dataset_display_name, feature_names=None):
+    """Comprehensive test of all implementations on a given dataset"""
+    print(f"=== Comprehensive {dataset_display_name} Dataset Test ===\n")
+
+    # Create dataset-specific plots directory
+    plot_dir = os.path.join("plots", dataset_file)
+    os.makedirs(plot_dir, exist_ok=True)
+    print(f"Plots will be saved to: plots/{dataset_file}/")
+   
+    # Load dataset
+    X, y = mGFR.func_read_data(dataset_file)
     
-    # Load COVID dataset
-    X, y = mGFR.func_read_data('dados_covid_sbpo_atual')
-    print(f"Dataset: COVID-19, shape: {X.shape}\n")
+    # Create default feature names if not provided
+    if feature_names is None:
+        feature_names = [f"Feature {i}" for i in range(X.shape[1])]
+    
+    print(f"Dataset: {dataset_display_name}, shape: {X.shape}\n")
     
     # Maximum k value (can't exceed number of features)
     nAttr = X.shape[1]
-    max_k = nAttr  # Set to number of features (9 for COVID dataset)
+    max_k = nAttr
     
     # Explain computational complexity and k-value limitation
     print(f"Using maximum k value of {max_k} (number of features in dataset)")
@@ -126,10 +140,12 @@ def comprehensive_covid_test():
         coalition_count = sum(comb(nAttr, i) for i in range(1, k+1))
         print(f"  k={k}: {coalition_count} coalitions")
     
-    print("\nComparison of implementation sparsity:")
-    print("  Ordered implementation: More efficient, produces sparser matrices")
-    print("  Unordered implementation: More comprehensive, produces denser matrices")
-    print("  Shapley 2-add: Fixed structure optimized for 2-additive models\n")
+    print("\nComparison of implementation approaches:")
+    print("  Game Choquet: Implementation of the standard k-additive Choquet integral")
+    #print("  Dif Aggregation: Non-Choquet aggregator using dif_aggregation_k_additive_game")
+    print("  Shapley (2-add): Fixed structure optimized for 2-additive models")
+    print("  Original Game-based: Mobius-based implementation approach\n")
+
     
     # Add timing information
     import time
@@ -143,9 +159,10 @@ def comprehensive_covid_test():
     
     # Define implementations to test
     implementations = [
-        ("Game-based (Ordered)", lambda X, k: choquet_matrix_kadd_guilherme(X, kadd=k)),
-        ("Refined (Unordered)", lambda X, k: refined_choquet_k_additive(X, k_add=k)),
-        ("Shapley (2-add)", lambda X, k: choquet_matrix_2add(X))
+        ("Game Choquet", lambda X, k: choquet_k_additive_game(X, k_add=k)),
+        #("Dif Aggregation", lambda X, k: dif_aggregation_k_additive_game(X, k_add=k)),
+        ("Shapley (2-add)", lambda X, k: choquet_matrix_2add(X)),
+        ("Mobius Choquet", lambda X, k: choquet_k_additive_mobius(X, k_add=k))
     ]
     
     # Test with different k values
@@ -154,9 +171,6 @@ def comprehensive_covid_test():
     
     # Store all models for later coefficient plotting
     all_models = {}
-    
-    # Generate coalition labels for all possible coalitions up to max_k
-    all_coalition_labels = generate_coalition_labels(feature_names, max_k)
     
     for name, implementation in implementations:
         print(f"\nTesting {name} implementation:")
@@ -255,6 +269,8 @@ def comprehensive_covid_test():
                     
             except Exception as e:
                 print(f"  ERROR: {str(e)}")
+                import traceback
+                print(traceback.format_exc())  # Print detailed error for debugging
     
     # Plot coefficients for each model
     for model_key, model_info in all_models.items():
@@ -290,100 +306,132 @@ def comprehensive_covid_test():
             else:
                 coalition_labels = coalition_labels[:n_features]
         
-        plot_title = f"{model_key} Coefficients"
+        plot_title = f"{dataset_display_name}: {model_key} Coefficients"
         filename = f"{model_key.replace(' ', '_').replace('(', '').replace(')', '').lower()}_coefficients.png"
-        plot_model_coefficients(model, feature_names, coalition_labels, plot_title, filename)
-    
+        plot_model_coefficients(model, feature_names, coalition_labels, plot_title, filename, dataset_file)
+     
     # Summary table
     print("\n=== Summary of Results ===")
     print(f"{'Implementation':<20} {'k':<3} {'Train Acc':<10} {'Test Acc':<10} {'AUC':<10} {'CV Accuracy':<12} {'Features':<10}")
     print("-" * 90)
     for r in results:
         print(f"{r['Implementation']:<20} {r['k']:<3} {r['Train Accuracy']:<10.4f} {r['Test Accuracy']:<10.4f} {r['AUC']:<10.4f} {r['CV Accuracy']:<8.4f} ± {r['CV Std']:<5.4f} {r['Features']:<10}")
-    
+
     # Visualize results
     plt.figure(figsize=(14, 10))
-    
+
     # Plot test accuracy by k value for each implementation
     plt.subplot(2, 1, 1)
-    
-    implementations = sorted(set(r['Implementation'] for r in results))
-    markers = ['o', 's', '^']
-    colors = ['blue', 'red', 'green']
-    
-    for i, impl in enumerate(implementations):
+
+    implementations_list = sorted(set(r['Implementation'] for r in results))
+    # Expanded markers and colors for 5 implementations
+    markers = ['o', 's', '^', 'D', 'v']
+    colors = ['blue', 'red', 'green', 'purple', 'orange']
+
+    for i, impl in enumerate(implementations_list):
         impl_results = [r for r in results if r['Implementation'] == impl]
+        
+        # Skip if no results for this implementation
+        if not impl_results:
+            print(f"Warning: No results to plot for {impl}")
+            continue
+            
         impl_results.sort(key=lambda x: x['k'])
         
         k_vals = [r['k'] for r in impl_results]
         accuracy = [r['Test Accuracy'] for r in impl_results]
         
-        plt.plot(k_vals, accuracy, marker=markers[i], color=colors[i], label=impl, linewidth=2)
-    
+        # If only one point, use a larger marker
+        if len(k_vals) == 1:
+            plt.scatter(k_vals, accuracy, marker=markers[i % len(markers)], 
+                    color=colors[i % len(colors)], s=100, label=impl)
+        else:
+            plt.plot(k_vals, accuracy, marker=markers[i % len(markers)], 
+                    color=colors[i % len(colors)], label=impl, linewidth=2)
+
     plt.xlabel('k value', fontsize=14)
     plt.ylabel('Test Accuracy', fontsize=14)
-    plt.title('COVID-19 Dataset: Accuracy by k value', fontsize=16)
-    plt.xticks(k_values)
+    plt.title(f'{dataset_display_name} Dataset: Accuracy by k value', fontsize=16)
+    if k_values:  # Only set ticks if we have k values
+        plt.xticks(k_values)
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
-    
+
     # Plot AUC by k value
     plt.subplot(2, 1, 2)
-    
-    for i, impl in enumerate(implementations):
+
+    for i, impl in enumerate(implementations_list):
         impl_results = [r for r in results if r['Implementation'] == impl]
+        
+        # Skip if no results for this implementation
+        if not impl_results:
+            continue
+            
         impl_results.sort(key=lambda x: x['k'])
         
         k_vals = [r['k'] for r in impl_results]
         auc = [r['AUC'] for r in impl_results]
         
-        plt.plot(k_vals, auc, marker=markers[i], color=colors[i], label=impl, linewidth=2)
-    
+        # If only one point, use a larger marker
+        if len(k_vals) == 1:
+            plt.scatter(k_vals, auc, marker=markers[i % len(markers)], 
+                    color=colors[i % len(colors)], s=100, label=impl)
+        else:
+            plt.plot(k_vals, auc, marker=markers[i % len(markers)], 
+                    color=colors[i % len(colors)], label=impl, linewidth=2)
+
     plt.xlabel('k value', fontsize=14)
     plt.ylabel('AUC', fontsize=14)
-    plt.title('COVID-19 Dataset: AUC by k value', fontsize=16)
-    plt.xticks(k_values)
+    plt.title(f'{dataset_display_name} Dataset: AUC by k value', fontsize=16)
+    if k_values:  # Only set ticks if we have k values
+        plt.xticks(k_values)
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
-    
+
     plt.tight_layout()
-    plt.savefig(os.path.join("plots", "covid_results_by_k.png"))
+    plt.savefig(os.path.join(plot_dir, f"{dataset_file}results_by_k.png"))
     plt.close()
-    print("\nPlot saved as 'plots/covid_results_by_k.png'")
-    
-    # Plot showing number of features vs. performance
+    print(f"\nPlot saved as 'plots/{dataset_file}/results_by_k.png'")
+
+    # Performance vs features plot also needs similar handling
     plt.figure(figsize=(14, 7))
-    
+
     # Group by implementation
-    for i, impl in enumerate(implementations):
+    for i, impl in enumerate(implementations_list):
         impl_results = [r for r in results if r['Implementation'] == impl]
+        
+        # Skip if no results for this implementation
+        if not impl_results:
+            continue
+            
         impl_results.sort(key=lambda x: x['Features'])
         
         features = [r['Features'] for r in impl_results]
         accuracy = [r['Test Accuracy'] for r in impl_results]
         auc = [r['AUC'] for r in impl_results]
         
-        plt.scatter(features, accuracy, marker=markers[i], color=colors[i], s=100, 
-                   label=f"{impl} (Accuracy)")
-        plt.scatter(features, auc, marker=markers[i], edgecolors=colors[i], facecolors='none', s=100,
-                   label=f"{impl} (AUC)")
+        plt.scatter(features, accuracy, marker=markers[i % len(markers)], 
+                color=colors[i % len(colors)], s=100, label=f"{impl} (Accuracy)")
+        plt.scatter(features, auc, marker=markers[i % len(markers)], 
+                edgecolors=colors[i % len(colors)], facecolors='none', s=100, 
+                label=f"{impl} (AUC)")
         
         # Add k value annotations
         for j, r in enumerate(impl_results):
             plt.annotate(f"k={r['k']}", (features[j], accuracy[j]), 
                         textcoords="offset points", xytext=(0,10), ha='center')
-    
+
     plt.xlabel('Number of Features', fontsize=14)
     plt.ylabel('Performance Metric', fontsize=14)
-    plt.title('COVID-19 Dataset: Performance vs. Number of Features', fontsize=16)
+    plt.title(f'{dataset_display_name} Dataset: Performance vs. Number of Features', fontsize=16)
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.legend()
-    
+
     plt.tight_layout()
-    plt.savefig(os.path.join("plots", "covid_performance_vs_features.png"))
+    plt.savefig(os.path.join(plot_dir, f"{dataset_file}performance_vs_features.png"))
     plt.close()
-    print("Plot saved as 'plots/covid_performance_vs_features.png'")
-    
+    print(f"Plot saved as 'plots/{dataset_file}/performance_vs_features.png'")
+ 
     # Find best performance
     best_result = max(results, key=lambda r: r['Test Accuracy'])
     print(f"\nBest performance: {best_result['Implementation']} with k={best_result['k']}")
@@ -391,5 +439,14 @@ def comprehensive_covid_test():
     print(f"  Test Accuracy: {best_result['Test Accuracy']:.4f}, AUC: {best_result['AUC']:.4f}")
     print(f"  Features: {best_result['Features']}")
 
+
 if __name__ == "__main__":
-    comprehensive_covid_test()
+    datasets = ['dados_covid_sbpo_atual', 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
+    
+    for dataset in datasets:  
+        try:
+            comprehensive_dataset_test(dataset, dataset)
+        except Exception as e:
+            print(f"Error analyzing dataset {dataset}: {str(e)}")
+
+

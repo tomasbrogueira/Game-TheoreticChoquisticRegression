@@ -10,7 +10,7 @@ from math import comb
 from itertools import combinations
 import pandas as pd
 from choquet_function import choquet_matrix_kadd_guilherme, choquet_matrix_2add
-from paper_code.covid_comprehensive_test import refined_choquet_k_additive
+from paper_code.k_add_test import refined_choquet_k_additive
 
 def create_k_additivity_diagram(max_features=5, max_k=4):
     """Create a visual diagram explaining k-additivity across implementations"""

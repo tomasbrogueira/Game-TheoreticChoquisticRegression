@@ -7,7 +7,7 @@ from itertools import combinations
 import pandas as pd
 from math import comb
 from choquet_function import choquet_matrix_2add
-from paper_code.covid_comprehensive_test import refined_choquet_k_additive
+from paper_code.k_add_test import refined_choquet_k_additive
 
 def create_simple_patterns(n_features=4):
     """Create simple input patterns to test coalition behavior"""

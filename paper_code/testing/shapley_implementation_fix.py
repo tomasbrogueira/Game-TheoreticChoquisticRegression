@@ -8,7 +8,7 @@ This file provides analysis and an improved implementation.
 import numpy as np
 from itertools import combinations
 from choquet_function import choquet_matrix_2add
-from paper_code.covid_comprehensive_test import refined_choquet_k_additive
+from paper_code.k_add_test import refined_choquet_k_additive
 from coalition_analysis_test import create_simple_patterns, identify_coalitions
 
 def analyze_shapley_representation():

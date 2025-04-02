@@ -7,7 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from itertools import combinations
 from choquet_function import choquet_matrix_2add, choquet_matrix_2add_fixed
-from paper_code.covid_comprehensive_test import refined_choquet_k_additive
+from paper_code.k_add_test import refined_choquet_k_additive
 from coalition_analysis_test import create_simple_patterns
 
 def analyze_matrix_structure(X):

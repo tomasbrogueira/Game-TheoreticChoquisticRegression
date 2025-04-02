@@ -9,7 +9,7 @@ from itertools import combinations
 import time
 import os
 from choquet_function import choquet_matrix_kadd_guilherme, choquet_matrix_2add
-from paper_code.covid_comprehensive_test import refined_choquet_k_additive
+from paper_code.k_add_test import refined_choquet_k_additive
 
 def analyze_coalition_structure(X, k_values=[1, 2, 3]):
     """Analyze which coalitions are active in each implementation for different input patterns"""

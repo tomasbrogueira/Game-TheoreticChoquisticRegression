@@ -127,28 +127,8 @@ def choquet_matrix_2add(X_orig):
 
     return data_opt[:,1:]
 
-def choquet_matrix_2add_alt(X_orig):
-    """Alternative implementation of the 2-additive Choquet integral transformation.
-    This version uses a different approach to generate the interaction terms."""
-    X = np.array(X_orig)
-    n_samples, n_features = X.shape
-    interactions = list(combinations(range(n_features), 2))
-    n_interactions = len(interactions)
-    
-    # Initialize design matrix: individual + interaction terms
-    design = np.zeros((n_samples, n_features + n_interactions))
-    
-    # Individual terms (directly use features)
-    design[:, :n_features] = X
-    
-    # Interaction terms (min(x_i, x_j))
-    for col, (i, j) in enumerate(interactions, start=n_features):
-        design[:, col] = np.minimum(X[:, i], X[:, j])
-    
-    return design
 
-
-def choquet_k_additive(X_orig, k_add=2):
+def choquet_k_additive_game(X_orig, k_add=2):
 
     X_orig = np.asarray(X_orig)
     nSamp, nAttr = X_orig.shape
@@ -199,7 +179,59 @@ def choquet_k_additive(X_orig, k_add=2):
     
     return transformed
 
-def game_choquet_k_additive(X_orig, k_add=2):
+def choquet_k_additive_unordered(X_orig, k_add=2):
+    """Refined implementation of k-additive Choquet integral transformation."""
+    X_orig = np.asarray(X_orig)
+    nSamp, nAttr = X_orig.shape
+    
+    # Generate all valid coalitions up to size k_add
+    all_coalitions = []
+    for r in range(1, k_add+1):
+        all_coalitions.extend(list(combinations(range(nAttr), r)))
+    
+    # Calculate number of features in the transformed space
+    n_transformed = len(all_coalitions)
+    
+    # Initialize output matrix
+    transformed = np.zeros((nSamp, n_transformed))
+    
+    # Performance optimization: Pre-compute coalition membership tests
+    # This significantly reduces the computational burden of the inner loop
+    coalition_members = {}
+    for coal_idx, coalition in enumerate(all_coalitions):
+        coalition_set = set(coalition)
+        coalition_members[coal_idx] = coalition_set
+    
+    # For each sample
+    for i in range(nSamp):
+        x = X_orig[i]
+        
+        # Sort feature indices by their values
+        sorted_indices = np.argsort(x)
+        sorted_values = x[sorted_indices]
+        
+        # Add a sentinel value for the first difference
+        sorted_values_ext = np.concatenate([[0], sorted_values])
+        
+        # For each position in the sorted feature list
+        for j in range(nAttr):
+            # Current feature index and value
+            feat_idx = sorted_indices[j]
+            # Difference with previous value
+            diff = sorted_values_ext[j+1] - sorted_values_ext[j]
+            
+            # All features from this position onward
+            higher_features = set(sorted_indices[j:])
+            
+            # Find all valid coalitions containing this feature and higher features
+            for coal_idx, coalition_set in coalition_members.items():
+                # Check if coalition is valid (optimized set operations)
+                if feat_idx in coalition_set and coalition_set.issubset(higher_features):
+                    transformed[i, coal_idx] += diff
+    
+    return transformed
+
+def choquet_k_additive_mobius(X_orig, k_add=2):
 
     X_orig = np.asarray(X_orig)
     nSamp, nAttr = X_orig.shape
@@ -264,7 +296,7 @@ def create_coalition_mapping(nAttr):
 def compare_reordered_matrices(X_orig, nAttr):
     # Get original and refined matrices
     original = choquet_matrix(X_orig)
-    refined = choquet_k_additive(X_orig, k_add=nAttr)
+    refined = choquet_k_additive_game(X_orig, k_add=nAttr)
     
     # Get mapping
     mapping, orig_coalitions, refined_coalitions = create_coalition_mapping(nAttr)
@@ -281,7 +313,7 @@ def compare_reordered_matrices(X_orig, nAttr):
 def compare_reordered_matrices_2add(X_orig, nAttr):
     # Get original and refined matrices
     original = choquet_matrix_2add(X_orig)
-    refined = choquet_k_additive(X_orig, k_add=2)
+    refined = choquet_k_additive_game(X_orig, k_add=2)
     
     # Get coalitions from original implementation
     coalition_list = []
@@ -426,9 +458,9 @@ for ll in range(len(data_imp)):
 
     # check coallitions being considered in each choquet matrix
     X_choquet = choquet_matrix(X_train_scaled)
-    X_choquet_refined = choquet_k_additive(X_train_scaled, k_add=5)
+    X_choquet_refined = choquet_k_additive_game(X_train_scaled, k_add=5)
     X_choquet_2add = choquet_matrix_2add(X_train_scaled)
-    X_choquet_refined_2add = choquet_k_additive(X_train_scaled, k_add=2)
+    X_choquet_refined_2add = choquet_k_additive_game(X_train_scaled, k_add=2)
     print(f"first choquet matrix: {X_choquet[0]}")
     print(f"first choquet refined matrix: {X_choquet_refined[0]}")
 
@@ -449,26 +481,29 @@ for ll in range(len(data_imp)):
     nSamp_small, nAttr_small = X_small.shape
 
     # Use k_add = 2 for testing
-    k_add = 2
+    k_add = 1
 
     X_choquet_small = choquet_matrix(X_small)
-    X_choquet_refined_small = choquet_k_additive(X_small, k_add=3)
+    X_choquet_refined_small = choquet_k_additive_game(X_small, k_add=3)
     print("equality choquet matrices: ", np.allclose(X_choquet_small, X_choquet_refined_small, rtol=1e-5, atol=1e-5))
     print(f"first choquet matrix: {X_choquet_small}")
 
 
     # Test 1: Original implementation vs. choquet_k_additive with fixed padding
     print("\n=== Test 1: Comparing original implementation vs choquet_k_additive ===")
-    X_choquet_alt = choquet_matrix_2add_alt(X_small)
     X_choquet_orig = choquet_matrix_2add(X_small)
-    X_choquet_refined = choquet_k_additive(X_small, k_add=k_add)
-    X_choquet_game = game_choquet_k_additive(X_small, k_add=k_add)
-    print("Alt 2-add Choquet:")
-    print(X_choquet_alt)
+    X_choquet_refined = choquet_k_additive_game(X_small, k_add=k_add)
+    X_choquet = choquet_matrix(X_small)
+    X_choquet_mobius = choquet_k_additive_mobius(X_small, k_add=k_add)
+    x_choquet_unordered = choquet_k_additive_unordered(X_small, k_add=k_add)
     print("Original 2-add Choquet:")
     print(X_choquet_orig)
     print("Refined Choquet without empty set:")
     print(X_choquet_refined)
     print("Game Choquet without empty set:")
-    print(X_choquet_game)
+    print(X_choquet_mobius)
+    print("Full Choquet without empty set:")
+    print(X_choquet)
+    print("Refined Choquet with unordered features:")
+    print(x_choquet_unordered)
 
