@@ -30,46 +30,6 @@ def nParam_kAdd(kAdd,nAttr):
         aux_numb += comb(nAttr,ii+1)
     return aux_numb
 
-#def choquet_matrix(X):
-    """
-    Generate the full Choquet matrix for the given dataset
-    """
-    n_samples, n_features = X.shape
-    feature_indices = list(range(n_features))
-    
-    # Get all possible subsets except the empty set
-    all_subsets = list(powerset(feature_indices))[1:]
-    n_subsets = len(all_subsets)
-    
-    choquet_X = np.zeros((n_samples, n_subsets))
-    
-    # For each subset, compute the minimum value of features in that subset
-    for i, subset in enumerate(all_subsets):
-        if len(subset) > 0:
-            choquet_X[:, i] = np.min(X[:, subset], axis=1)
-    
-    return choquet_X
-
-#def choquet_matrix_2add(X):
-    """
-    Generate the Choquet matrix with 2-additions for the given dataset
-    (only considering interactions between at most 2 features)
-    """
-    n_samples, n_features = X.shape
-    feature_indices = list(range(n_features))
-    
-    # Get subsets with at most 2 elements (excluding empty set)
-    subsets_2add = [s for s in powerset(feature_indices) if 0 < len(s) <= 2]
-    n_subsets = len(subsets_2add)
-    
-    choquet_X = np.zeros((n_samples, n_subsets))
-    
-    # For each subset, compute the minimum value of features in that subset
-    for i, subset in enumerate(subsets_2add):
-        choquet_X[:, i] = np.min(X[:, subset], axis=1)
-    
-    return choquet_X
-
 def choquet_matrix(X_orig):
     
     X_orig_sort = np.sort(X_orig)
@@ -219,16 +179,16 @@ def choquet_k_additive_unordered(X_orig, k_add=2):
             feat_idx = sorted_indices[j]
             # Difference with previous value
             diff = sorted_values_ext[j+1] - sorted_values_ext[j]
-            
+
             # All features from this position onward
             higher_features = set(sorted_indices[j:])
-            
+
             # Find all valid coalitions containing this feature and higher features
             for coal_idx, coalition_set in coalition_members.items():
                 # Check if coalition is valid (optimized set operations)
                 if feat_idx in coalition_set and coalition_set.issubset(higher_features):
                     transformed[i, coal_idx] += diff
-    
+
     return transformed
 
 def choquet_k_additive_mobius(X_orig, k_add=2):
@@ -240,17 +200,17 @@ def choquet_k_additive_mobius(X_orig, k_add=2):
     all_coalitions = []
     for r in range(1, min(k_add, nAttr)+1):
         all_coalitions.extend(list(combinations(range(nAttr), r)))
-    
+
     # Calculate number of features in the transformed space
     n_transformed = len(all_coalitions)
-    
+
     # Initialize output matrix (no longer restricted to non-negative values)
     transformed = np.zeros((nSamp, n_transformed))
-    
+
     # Process each sample directly without sorting
     for i in range(nSamp):
         x = X_orig[i]
-        
+
         # For each coalition, compute its value directly
         for idx, coalition in enumerate(all_coalitions):
             # For singleton coalition, use the feature value directly
@@ -260,7 +220,7 @@ def choquet_k_additive_mobius(X_orig, k_add=2):
             else:
                 coalition_values = [x[j] for j in coalition]
                 transformed[i, idx] = min(coalition_values)
-    
+
     return transformed
 
 # Mappin functions for full choquet

@@ -92,133 +92,99 @@ def choquet_matrix(X_orig, all_coalitions=None):
             data_opt[i, idx] = diff
     return data_opt, all_coalitions
 
-def choquet_matrix_kadd_guilherme(X_orig, kadd):
-    """
-    Compute the Choquet integral transformation matrix restricted to coalitions
-    of maximum size kadd.
+def choquet_k_additive_game(X_orig, k_add=None):
 
-    Parameters
-    ----------
-    X_orig : array-like, shape (n_samples, n_attributes)
-        The input data.
-    kadd : int
-        Maximum coalition size allowed.
-
-    Returns
-    -------
-    data_opt : ndarray, shape (n_samples, num_allowed_coalitions)
-        The Choquet integral matrix using allowed coalitions.
-
-    Raises
-    ------
-    ValueError
-        If kadd is greater than the number of features in X_orig.
-    """
+    X_orig = np.asarray(X_orig)
     nSamp, nAttr = X_orig.shape
-    if kadd > nAttr:
-        raise ValueError(f"kadd ({kadd}) cannot be greater than the number of features ({nAttr}).")
 
-    # Sort data row-wise and pad with zeros to compute successive differences
-    X_orig_sort = np.sort(X_orig, axis=1)
-    X_orig_sort_ind = np.argsort(X_orig, axis=1)
-    X_orig_sort_ext = np.concatenate((np.zeros((nSamp, 1)), X_orig_sort), axis=1)
+    if k_add is None:
+        k_add = nAttr
+    elif k_add > nAttr:
+        raise ValueError("k_add cannot be greater than the number of attributes.")
 
-    max_coal_size = kadd
-    num_coalitions = sum(comb(nAttr, r) for r in range(1, max_coal_size + 1))
-
-    sequence = np.arange(nAttr)
-    combin = 99 * np.ones((num_coalitions, nAttr), dtype=int)
-    count = 0
-    for r in range(1, max_coal_size + 1):
-        combos = list(itertools.combinations(sequence, r))
-        for i, combo in enumerate(combos):
-            combin[count + i, :r] = combo
-        count += len(combos)
-
-    data_opt = np.zeros((nSamp, num_coalitions))
-    # Only compute differences corresponding to allowed coalition sizes
-    start_idx = nAttr - max_coal_size
-    for jj in range(nSamp):
-        for ii in range(start_idx, nAttr):
-            coalition = np.concatenate((np.sort(X_orig_sort_ind[jj, ii:]), 99 * np.ones(ii, dtype=int)), axis=0).tolist()
-            try:
-                aux = combin.tolist().index(coalition)
-            except ValueError:
-                continue
-            data_opt[jj, aux] = X_orig_sort_ext[jj, ii + 1] - X_orig_sort_ext[jj, ii]
-
-    return data_opt
-
-def choquet_matrix_new(X_orig, k_add=None):
-    """
-    Unified implementation of the Choquet integral transformation matrix supporting k-additivity.
-    
-    This function strictly implements the Choquet integral as per Equation (22) in the paper:
-    f_CI(v, x_i) = Σ_{j=1}^{m} (x_{i,(j)} - x_{i,(j-1)}) * v({(j), ..., (m)})
-    
-    For k-additive models, it limits the coalition sizes to k and distributes values from larger
-    coalitions appropriately among smaller ones.
-    
-    Parameters:
-      X_orig : array-like, shape (nSamp, nAttr)
-          The original data.
-      k_add : int
-          The maximum coalition size (k–additivity).
-          
-    Returns:
-      data_opt : np.ndarray, shape (nSamp, n_coalitions)
-    """
-    X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape
-    
-    max_size = k_add if k_add is not None else nAttr
-    
-
+    # Generate all valid coalitions up to size k_add
     all_coalitions = []
-    for r in range(1, min(max_size, nAttr) + 1):
-        all_coalitions.extend(list(itertools.combinations(range(nAttr), r)))
+    for r in range(1, min(k_add, nAttr)+1):
+        all_coalitions.extend(list(combinations(range(nAttr), r)))
     
-
-    coalition_to_index = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
-    data_opt = np.zeros((nSamp, len(all_coalitions)))
     
-    # f_CI(v, x_i) = Σ_{j=1}^{m} (x_{i,(j)} - x_{i,(j-1)}) * v({(j), ..., (m)})
+    # Calculate number of features in the transformed space
+    n_transformed = len(all_coalitions)
+    
+    # Initialize output matrix
+    transformed = np.zeros((nSamp, n_transformed))
+    
+    # Create a mapping from coalition tuples to indices
+    coalition_to_idx = {coalition: idx for idx, coalition in enumerate(all_coalitions)}
+    
+    # Process each sample following the original method
     for i in range(nSamp):
-        order = np.argsort(X_orig[i])
-        sorted_vals = np.sort(X_orig[i])
-        prev = 0.0
+        x = X_orig[i]
         
+        # Sort feature indices by their values (ascending)
+        sorted_indices = np.argsort(x)
+        sorted_values = x[sorted_indices]
+        
+        # Add a sentinel value (0) at the beginning
+        sorted_values_ext = np.concatenate([[0], sorted_values])
+        
+        # For each position in the sorted list
         for j in range(nAttr):
-            # Calculate the difference (x_{i,(j)} - x_{i,(j-1)})
-            diff = sorted_vals[j] - prev
-            prev = sorted_vals[j]
+            # Calculate difference with previous value
+            diff = sorted_values_ext[j+1] - sorted_values_ext[j]
             
-            full_coalition = tuple(sorted(order[j:]))
+            # Get the current set of "active" features (those from position j onward)
+            # This matches the original algorithm's logic for finding the right coalition
+            active_features = tuple(sorted(sorted_indices[j:]))
             
-            if len(full_coalition) <= max_size:
-                idx = coalition_to_index.get(full_coalition)
-                if idx is not None:
-                    data_opt[i, idx] = diff
-            else:
-                current_feature = order[j]
-                remaining_features = order[j+1:]
+            # Skip if the active features set is too large for our k_add restriction
+            if len(active_features) > k_add:
+                continue
                 
-                if max_size > 0:
-                    if len(remaining_features) >= max_size - 1:
-                        for subset in itertools.combinations(remaining_features, max_size - 1):
-                            coalition = tuple(sorted((current_feature,) + subset))
-                            idx = coalition_to_index.get(coalition)
-                            if idx is not None:
-                                weight = 1.0 / comb(len(remaining_features), max_size - 1)
-                                data_opt[i, idx] += diff * weight
-                    else:
-                        coalition = full_coalition
-                        idx = coalition_to_index.get(coalition)
-                        if idx is not None:
-                            data_opt[i, idx] += diff
+            # If this exact coalition exists, assign the difference to it
+            if active_features in coalition_to_idx:
+                idx = coalition_to_idx[active_features]
+                transformed[i, idx] = diff
     
-    return data_opt, all_coalitions
+    return transformed
 
+
+def choquet_k_additive_mobius(X_orig, k_add=None):
+
+    X_orig = np.asarray(X_orig)
+    nSamp, nAttr = X_orig.shape
+
+    if k_add is None:
+        k_add = nAttr
+    elif k_add > nAttr:
+        raise ValueError("k_add cannot be greater than the number of attributes.")
+
+    # Generate all valid coalitions up to size k_add
+    all_coalitions = []
+    for r in range(1, min(k_add, nAttr)+1):
+        all_coalitions.extend(list(combinations(range(nAttr), r)))
+
+    # Calculate number of features in the transformed space
+    n_transformed = len(all_coalitions)
+
+    # Initialize output matrix (no longer restricted to non-negative values)
+    transformed = np.zeros((nSamp, n_transformed))
+
+    # Process each sample directly without sorting
+    for i in range(nSamp):
+        x = X_orig[i]
+
+        # For each coalition, compute its value directly
+        for idx, coalition in enumerate(all_coalitions):
+            # For singleton coalition, use the feature value directly
+            if len(coalition) == 1:
+                transformed[i, idx] = x[coalition[0]]
+            # For larger coalitions, use the minimum value across the coalition
+            else:
+                coalition_values = [x[j] for j in coalition]
+                transformed[i, idx] = min(coalition_values)
+
+    return transformed
 
 def choquet_matrix_2add(X_orig):
     """
@@ -347,166 +313,87 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
     Transformer for Choquet or multilinear based feature transformations.
     
     This transformer implements various fuzzy measure-based transformations:
-    - Full Choquet integral (exponential complexity)
-    - 2-additive Choquet integral (quadratic complexity)
-    - Full multilinear model (exponential complexity)
-    - 2-additive multilinear model (quadratic complexity)
+    - Choquet integral 
+        - k-additive Choquet integral with game representation
+        - k-additive Choquet integral with Möbius representation
+        - 2-additive Choquet integral with shapely representation
+    - Full multilinear model 
+    - 2-additive multilinear model
     
-    For the full Choquet integral, the transformation computes:
-    C_μ(x) = Σ_{i=1}^n (x_σ(i) - x_σ(i-1)) * μ({σ(i), ..., σ(n)})
-    where σ orders the features in ascending order.
-    
-    For the 2-additive Choquet, only singleton and pairwise terms are used:
-    C_μ(x) = Σ_i μ({i})*x_i + Σ_{i<j} I({i,j})*min(x_i, x_j)
-    
-    For the multilinear model (MLM), the transformation computes basis functions:
-    MLM(x) = Σ_{T⊆N} m(T) * Π_{i∈T} x_i * Π_{j∉T} (1-x_j)
-    
-    For MLM methods, input features should be scaled to [0,1] range
-
     Parameters
     ----------
     method : str, default="choquet_2add"
         The transformation method. Options:
-        - "choquet": Full Choquet integral
-        - "choquet_2add": 2-additive Choquet integral
+        - "choquet": General Choquet integral
+        - "choquet_2add": 2-additive Choquet integral shapely representation
         - "mlm": Full multilinear model
         - "mlm_2add": 2-additive multilinear model
+    representation : str, default="game"
+        For method="choquet", defines the representation to use:
+        - "game": Uses game-based representation
+        - "mobius": Uses Möbius representation
+        Ignored for other methods.
     k_add : int or None, default=None
-        Additivity level for k-additive models. If not None and method is 
-        "choquet" or "mlm", restricts to k-additive model. Ignored for 
-        methods ending with "_2add".
+        Additivity level for k-additive models. If not specified and method is 
+        "choquet", defaults to using all features. Ignored for methods ending 
+        with "_2add" (where k_add=2 is implicit).
     """
 
-    def __init__(self, method="choquet_2add", k_add=None):
+    def __init__(self, method="choquet_2add", representation="game", k_add=None):
         self.method = method
+        self.representation = representation
         self.k_add = k_add
         
-        # Validate method
         valid_methods = ["choquet", "choquet_2add", "mlm", "mlm_2add"]
         if method not in valid_methods:
             raise ValueError(f"Method must be one of {valid_methods}")
-        
-        # Validate k_add if specified
+        if method == "choquet":
+            valid_representations = ["game", "mobius"]
+            if representation not in valid_representations:
+                raise ValueError(f"For method='choquet', representation must be one of {valid_representations}")
         if k_add is not None:
             if not isinstance(k_add, int) or k_add < 1:
                 raise ValueError("k_add must be a positive integer")
-            if method.endswith("_2add"):
-                # Instead of warning, silently ignore since this is a common pattern
-                pass
-            elif k_add < 1:
-                raise ValueError(f"k_add must be at least 1, got {k_add}")
-        
-        
+            # For methods ending with '_2add' k_add is implicit; otherwise, k_add is used.
+    
     def fit(self, X, y=None):
         X = check_array(X, ensure_min_features=1)
-        
-        # Store number of features for all methods
         self.n_features_in_ = X.shape[1]
-        
-        # For Choquet, pre-compute coalition structure
-        if self.method == "choquet":
-            if self.k_add is None:
-                # Full Choquet - all coalitions
-                _, all_coalitions = choquet_matrix(X)
-            else:
-                # k-additive Choquet - coalitions up to size k
-                all_coalitions = []
-                for r in range(1, min(self.k_add, self.n_features_in_) + 1):
-                    all_coalitions.extend(list(itertools.combinations(range(self.n_features_in_), r)))
-            self.all_coalitions_ = all_coalitions
-        
+        if self.method == "choquet" and self.representation == "game":
+            k = self.k_add if self.k_add is not None else self.n_features_in_
+            self.all_coalitions_ = list(powerset(range(self.n_features_in_), k))
         return self
 
     def transform(self, X):
-        """
-        Transform X by applying the selected matrix transformation.
-        """
         check_is_fitted(self, ["n_features_in_"])
-        
         X = check_array(X)
-        
         if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"X has {X.shape[1]} features, but ChoquetTransformer is expecting "
-                            f"{self.n_features_in_} features.")
-
-
+            raise ValueError(f"X has {X.shape[1]} features, but expected {self.n_features_in_}.")
+        
         if self.method == "choquet":
-            if not hasattr(self, "all_coalitions_"):
-                raise AttributeError("Transformer not properly fitted. Call fit() before transform().")
-            X_trans, _ = choquet_matrix(X, all_coalitions=self.all_coalitions_)
-            return X_trans
-            
+            if self.representation == "game":
+                return choquet_k_additive_game(X, k_add=self.k_add)
+            elif self.representation == "mobius":
+                return choquet_k_additive_mobius(X, k_add=self.k_add)
+            else:
+                raise ValueError(f"Unknown representation: {self.representation}")
         elif self.method == "choquet_2add":
             return choquet_matrix_2add(X)
-            
         elif self.method == "mlm":
             if self.k_add is not None:
                 raise NotImplementedError("k-additive MLM not yet implemented")
             return mlm_matrix(X)
-            
         elif self.method == "mlm_2add":
             return mlm_matrix_2add(X)
-            
         else:
             raise ValueError(f"Unknown method: {self.method}")
 
     def get_feature_names_out(self, input_features=None):
         check_is_fitted(self, ["n_features_in_"])
-        
-        if input_features is None:
-            input_features = [f"x{i}" for i in range(self.n_features_in_)]
-        else:
-            if len(input_features) != self.n_features_in_:
-                raise ValueError(
-                    f"input_features has length {len(input_features)} but "
-                    f"transformer expects {self.n_features_in_} features.")
-        
-        if self.method == "choquet":
-            # For full Choquet, feature names correspond to coalitions
-            feature_names = []
-            for coalition in self.all_coalitions_:
-                feature_names.append("_AND_".join(input_features[i] for i in coalition))
-            return np.array(feature_names, dtype=object)
-            
-        elif self.method == "choquet_2add":
-            feature_names = []
-            # Singletons
-            feature_names.extend(input_features)
-            # Pairs - min(x_i, x_j)
-            for i in range(self.n_features_in_):
-                for j in range(i+1, self.n_features_in_):
-                    feature_names.append(f"min({input_features[i]}, {input_features[j]})")
-            return np.array(feature_names, dtype=object)
-            
-        elif self.method == "mlm":
-            # Full MLM feature names
-            if not hasattr(self, "all_coalitions_"):
-                # Generate all coalitions for MLM
-                all_coalitions = []
-                for r in range(1, self.n_features_in_ + 1):
-                    all_coalitions.extend(list(itertools.combinations(range(self.n_features_in_), r)))
-                
-            feature_names = []
-            for coalition in all_coalitions:
-                terms = []
-                for i in range(self.n_features_in_):
-                    if i in coalition:
-                        terms.append(input_features[i])
-                    else:
-                        terms.append(f"(1-{input_features[i]})")
-                feature_names.append("*".join(terms))
-            return np.array(feature_names, dtype=object)
-            
-        elif self.method == "mlm_2add":
-            feature_names = []
-            # Singletons
-            feature_names.extend(input_features)
-            # Pairs - x_i * x_j
-            for i in range(self.n_features_in_):
-                for j in range(i+1, self.n_features_in_):
-                    feature_names.append(f"{input_features[i]}*{input_features[j]}")
-            return np.array(feature_names, dtype=object)
+        dummy = np.zeros((1, self.n_features_in_))
+        transformed = self.transform(dummy)
+        n_out = transformed.shape[1]
+        return np.array([f"F{i}" for i in range(n_out)], dtype=object)
 
 
 # =============================================================================
@@ -530,38 +417,49 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
     ----------
     method : str, default="choquet_2add"
         Transformation method to use. Options:
-        - "choquet": Full Choquet integral
-        - "choquet_2add": 2-additive Choquet integral
+        - "choquet": Choquet integral
+        - "choquet_2add": 2-additive Choquet integral shapely representation
         - "mlm": Full multilinear model
         - "mlm_2add": 2-additive multilinear model
+    representation : str, default="game"
+        For method="choquet", defines the representation to use:
+        - "game": Uses game-based representation
+        - "mobius": Uses Möbius representation
+        Ignored for other methods.
     k_add : int or None, default=None
         Additivity level for k-additive models. Only used when method is "choquet" or "mlm".
     scale_data : bool, default=True
         Whether to scale data to [0,1] range with MinMaxScaler.
+    logistic_params : dict or None, default=None
+        Parameters passed to LogisticRegression. If None or incomplete, default values are used.
     **kwargs : dict
         Additional parameters passed to LogisticRegression.
     """
 
-    def __init__(self, method="choquet_2add", k_add=None, scale_data=True, **kwargs):
+    def __init__(self, method="choquet", representation="game", k_add=None, scale_data=True,
+                 logistic_params=None, **kwargs):
+        # Store ALL parameters as attributes
         self.method = method
+        self.representation = representation
         self.k_add = k_add
         self.scale_data = scale_data
+        self.logistic_params = logistic_params
         
-
-        default_params = {
-            "penalty": None,
-            "max_iter": 1000,
-            "solver": "newton-cg",
-            "random_state": 0
+        # Default parameters for LogisticRegression
+        self.default_logistic_params = {
+            'C': 1.0,
+            'penalty': 'l2',
+            'solver': 'newton-cg',
+            'max_iter': 100,
+            'tol': 1e-4,
+            'class_weight': None,
+            'random_state': None,
+            'fit_intercept': True
         }
         
-        self.logistic_params = default_params.copy()
-        self.logistic_params.update(kwargs)
-        
-        # Validate method
-        valid_methods = ["choquet", "choquet_2add", "mlm", "mlm_2add"]
-        if method not in valid_methods:
-            raise ValueError(f"Method must be one of {valid_methods}")
+        # Additional parameters from kwargs
+        for key, value in kwargs.items():
+            setattr(self, key, value)
 
     def fit(self, X, y):
         X = check_array(X)
@@ -575,22 +473,31 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
         else:
             X_scaled = X
             
-        # Create transformer with correct parameters (no scale_data parameter)
+        # Create and fit transformer
         self.transformer_ = ChoquetTransformer(
-            method=self.method, 
+            method=self.method,
+            representation=self.representation,  
             k_add=self.k_add
         )
-        X_transformed = self.transformer_.fit_transform(X_scaled)
+        self.transformer_.fit(X_scaled)
+        X_transformed = self.transformer_.transform(X_scaled)
         
         self.transformed_n_features_in_ = X_transformed.shape[1]
         
-        self.classifier_ = LogisticRegression(**self.logistic_params)
+        # Merge default and user-provided parameters
+        params = self.default_logistic_params.copy()
+        if self.logistic_params is not None:
+            params.update(self.logistic_params)
+            
+        self.classifier_ = LogisticRegression(**params)
         self.classifier_.fit(X_transformed, y)
         
+        # Copy attributes from classifier for convenience
         self.coef_ = self.classifier_.coef_
         self.intercept_ = self.classifier_.intercept_
         self.classes_ = self.classifier_.classes_
-        self.n_iter_ = self.classifier_.n_iter_
+        if hasattr(self.classifier_, 'n_iter_'):
+            self.n_iter_ = self.classifier_.n_iter_
         
         return self
 
@@ -636,33 +543,16 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
     
     def get_model_capacity(self):
         """
-        Extract the capacity measure from the model in a dict from coallitions to values
+        Extract the capacity measure from the model as a mapping from transformed
+        feature names (as generated by the transformer) to coefficient values.
         """
         check_is_fitted(self, ["coef_"])
         capacity = {}
-        
-        if self.method == "choquet":
-            all_coalitions = self.transformer_.all_coalitions_
-            coef = self.coef_[0]
-            for i, coalition in enumerate(all_coalitions):
-                capacity[coalition] = coef[i]
-                
-        elif self.method == "choquet_2add":
-            n_attr = self.n_features_in_
-            coef = self.coef_[0]
-            
-            # Singletons
-            for i in range(n_attr):
-                capacity[(i,)] = coef[i]
-                
-            # Add interaction terms (corresponding to pairs)
-            idx = n_attr
-            for i in range(n_attr):
-                for j in range(i + 1, n_attr):
-                    pair = (i, j)
-                    capacity[pair] = coef[idx]
-                    idx += 1
-                    
+        # Derive feature names via the transformer.
+        feature_names = self.transformer_.get_feature_names_out()
+        coef = self.coef_[0]
+        for i, name in enumerate(feature_names):
+            capacity[name] = coef[i]
         return capacity
 
     def compute_shapley_values(self):
@@ -717,12 +607,13 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
 # =============================================================================
 # Implementation 2: Inheritance-based ChoquisticRegression
 # =============================================================================
+
 class ChoquisticRegression_Inheritance(LogisticRegression):
     """
-    Choquistic Regression classifier using inheritance.
-    
-    This class extends LogisticRegression and adds the Choquet integral or
-    multilinear model transformation as a preprocessing step. The model represents:
+    Choquistic Regression classifier using inheritance from LogisticRegression.
+
+    This estimator combines the Choquet integral (or multilinear model) transformation
+    with logistic regression through inheritance. The model can be written as:
     
     P(Y=1|x) = 1/(1 + exp(-w₀ - C_μ(x)))
     
@@ -730,176 +621,135 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
     
     Parameters
     ----------
-    method : str, default="choquet_2add"
+    method : str, default="choquet"
         Transformation method to use. Options:
-        - "choquet": Full Choquet integral
-        - "choquet_2add": 2-additive Choquet integral
+        - "choquet": Choquet integral
+        - "choquet_2add": 2-additive Choquet integral shapely representation
         - "mlm": Full multilinear model
         - "mlm_2add": 2-additive multilinear model
+    representation : str, default="game"
+        For method="choquet", defines the representation to use:
+        - "game": Uses game-based representation
+        - "mobius": Uses Möbius representation
+        Ignored for other methods.
     k_add : int or None, default=None
         Additivity level for k-additive models. Only used when method is "choquet" or "mlm".
     scale_data : bool, default=True
         Whether to scale data to [0,1] range with MinMaxScaler.
+    logistic_params : dict or None, default=None
+        Parameters passed to the parent LogisticRegression constructor. If None or incomplete, 
+        default values are used.
     **kwargs : dict
-        Additional parameters passed to LogisticRegression.
+        Additional parameters (not used directly but maintained for API compatibility).
     """
-
-    def __init__(self, method="choquet_2add", k_add=None, scale_data=True, **kwargs):
-        self.method = method
-        self.k_add = k_add
-        self.scale_data = scale_data
-        
+    def __init__(self, method="choquet", representation="game", k_add=None, scale_data=True,
+                 logistic_params=None, **kwargs):
+        # Default parameters for LogisticRegression
         default_params = {
-            "penalty": None,
-            "max_iter": 1000,
-            "solver": "newton-cg",
-            "random_state": 0
+            'C': 1.0,
+            'penalty': 'l2',
+            'solver': 'newton-cg',
+            'max_iter': 100,
+            'tol': 1e-4,
+            'class_weight': None,
+            'random_state': None,
+            'fit_intercept': True
         }
         
-        for key, value in default_params.items():
-            if key not in kwargs:
-                kwargs[key] = value
+        # Merge default parameters with user-provided ones
+        params = default_params.copy()
+        if logistic_params is not None:
+            params.update(logistic_params)
+            
+        # Call parent constructor with merged parameters
+        super().__init__(**params)  
         
-        # Initialize LogisticRegression with given parameters
-        super().__init__(**kwargs)
+        # Store our specific parameters
+        self.method = method
+        self.representation = representation
+        self.k_add = k_add
+        self.scale_data = scale_data
+        self.logistic_params = logistic_params
         
-        # Create transformer (no scale_data parameter)
-        self.transformer_ = ChoquetTransformer(
-            method=self.method, 
-            k_add=self.k_add
-        )
-        
-        # Validate method
-        valid_methods = ["choquet", "choquet_2add", "mlm", "mlm_2add"]
-        if method not in valid_methods:
-            raise ValueError(f"Method must be one of {valid_methods}")
-
-    def fit(self, X, y, **fit_params):
+    def fit(self, X, y):
         X = check_array(X)
-
-        self.original_n_features_in_ = X.shape[1]
-
+        self.original_n_features_in_ = X.shape[1] 
+        self.n_features_in_ = X.shape[1]
+        
         if self.scale_data:
             self.scaler_ = MinMaxScaler().fit(X)
             X_scaled = self.scaler_.transform(X)
         else:
             X_scaled = X
             
-        # Transform data using the Choquet transformer
-        X_transformed = self.transformer_.fit_transform(X_scaled)
+        self.transformer_ = ChoquetTransformer(
+            method=self.method,
+            representation=self.representation,  
+            k_add=self.k_add
+        )
+        self.transformer_.fit(X_scaled)
+        X_transformed = self.transformer_.transform(X_scaled)
         
         self.transformed_n_features_in_ = X_transformed.shape[1]
-
-        return super().fit(X_transformed, y, **fit_params)
+        
+        return super().fit(X_transformed, y)
 
     def _transform(self, X):
-        """Transform input data through scaling and Choquet transformation."""
-        check_is_fitted(self, ["original_n_features_in_", "transformed_n_features_in_"])
+        check_is_fitted(self, ["original_n_features_in_", "transformer_"])
         X = check_array(X)
-        
-        if X.shape[1] == self.original_n_features_in_:
-            if self.scale_data:
-                X_scaled = self.scaler_.transform(X)
-            else:
-                X_scaled = X
-                
-            return self.transformer_.transform(X_scaled)
-        elif X.shape[1] == self.transformed_n_features_in_:
-            return X
-        else:
-            raise ValueError(f"X has {X.shape[1]} features, but ChoquisticRegression was fitted with "
-                           f"{self.original_n_features_in_} original features "
-                           f"(transformed into {self.transformed_n_features_in_} features).")
-            
+        if X.shape[1] != self.original_n_features_in_:
+            raise ValueError(f"X has {X.shape[1]} features but expected {self.original_n_features_in_}")
+        X_scaled = self.scaler_.transform(X) if self.scale_data else X
+        return self.transformer_.transform(X_scaled)
+
     def predict(self, X):
-        check_is_fitted(self)
-        X_transformed = self._transform(X)
-        return super().predict(X_transformed)
+        return super().predict(self._transform(X))
 
     def predict_proba(self, X):
-        check_is_fitted(self)
-        X_transformed = self._transform(X)
-        return super().predict_proba(X_transformed)
-
-    def predict_log_proba(self, X):
-        X_transformed = self._transform(X)
-        return super().predict_log_proba(X_transformed)
+        return super().predict_proba(self._transform(X))
 
     def decision_function(self, X):
-        check_is_fitted(self)
-        X_transformed = self._transform(X)
-        return super().decision_function(X_transformed)
+        return super().decision_function(self._transform(X))
+
+    def predict_log_proba(self, X):
+        return super().predict_log_proba(self._transform(X))
 
     def score(self, X, y, sample_weight=None):
-        X_transformed = self._transform(X)
-        return super().score(X_transformed, y, sample_weight=sample_weight)
+        return super().score(self._transform(X), y, sample_weight=sample_weight)
 
     def get_model_capacity(self):
-        """
-        Extract the capacity measure from the model in a dict from coallitions to values
-        """
         check_is_fitted(self, ["coef_"])
         capacity = {}
-        
-        if self.method == "choquet":
-            all_coalitions = self.transformer_.all_coalitions_
-            coef = self.coef_[0]
-            for i, coalition in enumerate(all_coalitions):
-                capacity[coalition] = coef[i]
-                
-        elif self.method == "choquet_2add":
-            n_attr = self.original_n_features_in_
-            coef = self.coef_[0]
-            
-            # Singletons
-            for i in range(n_attr):
-                capacity[(i,)] = coef[i]
-                
-            # Add interaction terms (corresponding to pairs)
-            idx = n_attr
-            for i in range(n_attr):
-                for j in range(i + 1, n_attr):
-                    pair = (i, j)
-                    capacity[pair] = coef[idx]
-                    idx += 1
-                    
+        feature_names = self.transformer_.get_feature_names_out()
+        coef = self.coef_[0]
+        for i, name in enumerate(feature_names):
+            capacity[name] = coef[i]
         return capacity
 
     def compute_shapley_values(self):
         check_is_fitted(self, ["coef_"])
-        
         if self.method == "choquet":
-            m = self.original_n_features_in_
-            all_coalitions = self.transformer_.all_coalitions_
-            v = self.coef_[0]
-            
-            phi = compute_shapley_values(v, m, all_coalitions)
-            return phi
-
+            n = self.n_features_in_
+            # Depending on your implementation, you might need to use self.transformer_.all_coalitions_
+            raise NotImplementedError("Shapley value computation for choquet (game) not yet implemented in inheritance version")
         elif self.method == "choquet_2add":
-            # φj = μ({j}) + 0.5 * Σi≠j I({i,j})
-            nAttr = self.original_n_features_in_
+            nAttr = self.n_features_in_
             coef = self.coef_[0]
-            
-            marginal_contrib = coef[:nAttr].copy()  # singleton capacities: μ({j})
-            interactions = coef[nAttr:]             # interaction indices: I({i,j})
-
+            marginal_contrib = coef[:nAttr].copy()
+            interactions = coef[nAttr:]
             interaction_matrix = np.zeros((nAttr, nAttr))
             counter = 0
             for i in range(nAttr):
                 for j in range(i + 1, nAttr):
                     interaction_matrix[i, j] = interactions[counter]
-                    interaction_matrix[j, i] = interactions[counter] 
+                    interaction_matrix[j, i] = interactions[counter]
                     counter += 1
-
             shapley_vals = marginal_contrib + 0.5 * np.sum(interaction_matrix, axis=1)
             return {"marginal": marginal_contrib, "shapley": shapley_vals}
-        
-        elif self.method.startswith("mlm"):
-            raise NotImplementedError("Shapley value computation for MLM methods not yet implemented")
-            
         else:
-            raise ValueError("Shapley value computation is only implemented for 'choquet' and 'choquet_2add' methods.")
+            raise NotImplementedError("Shapley value computation for MLM methods not yet implemented")
+
+
 
 # =============================================================================
 # Utility functions 
