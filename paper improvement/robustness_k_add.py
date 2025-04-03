@@ -343,7 +343,6 @@ def run_batch_analysis(datasets_list, representation="game"):
     main_dir = f"k_additivity_analysis_{representation}"
     os.makedirs(main_dir, exist_ok=True)
     
-    
     # Datasets to analyze
     datasets = datasets_list
     
@@ -367,21 +366,45 @@ def run_batch_analysis(datasets_list, representation="game"):
             # Only extract metrics if there are valid results
             valid_results = results.dropna(subset=['baseline_accuracy'])
             if len(valid_results) > 0:
-                # Extract key metrics for summary
-                best_k_acc = valid_results['baseline_accuracy'].idxmax()
-                best_k_noise = valid_results['noise_0.3'].idxmax()
-                best_k_stability = valid_results['bootstrap_std'].idxmin()
-                
-                summary_data.append({
-                    'dataset': dataset,
-                    'n_attr': len(results),
-                    'best_k_accuracy': best_k_acc,
-                    'best_k_noise': best_k_noise,
-                    'best_k_stability': best_k_stability,
-                    'max_accuracy': valid_results.loc[best_k_acc, 'baseline_accuracy'],
-                    'noise_robustness': valid_results.loc[best_k_noise, 'noise_0.3'],
-                    'stability': valid_results.loc[best_k_stability, 'bootstrap_std'],
-                })
+                try:
+                    # Extract key metrics for summary with error handling
+                    dataset_summary = {'dataset': dataset, 'n_attr': len(results)}
+                    
+                    # Try to get best k for accuracy
+                    try:
+                        best_k_acc = valid_results['baseline_accuracy'].idxmax()
+                        dataset_summary['best_k_accuracy'] = int(best_k_acc)
+                        dataset_summary['max_accuracy'] = float(valid_results.loc[best_k_acc, 'baseline_accuracy'])
+                    except Exception as e:
+                        print(f"Warning: Could not determine best k for accuracy for {dataset}: {e}")
+                        dataset_summary['best_k_accuracy'] = 1
+                        dataset_summary['max_accuracy'] = 0.0
+                    
+                    # Try to get best k for noise robustness
+                    try:
+                        best_k_noise = valid_results['noise_0.3'].idxmax()
+                        dataset_summary['best_k_noise'] = int(best_k_noise)
+                        dataset_summary['noise_robustness'] = float(valid_results.loc[best_k_noise, 'noise_0.3'])
+                    except Exception as e:
+                        print(f"Warning: Could not determine best k for noise robustness for {dataset}: {e}")
+                        dataset_summary['best_k_noise'] = 1
+                        dataset_summary['noise_robustness'] = 0.0
+                    
+                    # Try to get best k for stability
+                    try:
+                        best_k_stability = valid_results['bootstrap_std'].idxmin()
+                        dataset_summary['best_k_stability'] = int(best_k_stability)
+                        dataset_summary['stability'] = float(valid_results.loc[best_k_stability, 'bootstrap_std'])
+                    except Exception as e:
+                        print(f"Warning: Could not determine best k for stability for {dataset}: {e}")
+                        dataset_summary['best_k_stability'] = 1
+                        dataset_summary['stability'] = 1.0  # Higher is worse for stability
+                    
+                    # Add to summary data
+                    summary_data.append(dataset_summary)
+                    
+                except Exception as e:
+                    print(f"Warning: Could not extract summary metrics for {dataset}: {e}")
             else:
                 print(f"Warning: No valid results for dataset {dataset}")
             
@@ -392,52 +415,71 @@ def run_batch_analysis(datasets_list, representation="game"):
     
     # Create cross-dataset comparison plots
     if summary_data:
+        # Convert to DataFrame, ensuring all values are proper types
         summary_df = pd.DataFrame(summary_data)
+        
+        # Save raw summary data
         summary_df.to_csv(os.path.join(main_dir, f"datasets_summary_{representation}.csv"), index=False)
         
         # Create bar chart comparing optimal k values across datasets
-        plt.figure(figsize=(14, 8))
-        datasets = summary_df['dataset']
-        x = np.arange(len(datasets))
-        width = 0.25
-        
-        plt.bar(x - width, summary_df['best_k_accuracy'], width, label='Best k (Accuracy)')
-        plt.bar(x, summary_df['best_k_noise'], width, label='Best k (Noise Robustness)')
-        plt.bar(x + width, summary_df['best_k_stability'], width, label='Best k (Stability)')
-        
-        plt.xlabel('Dataset')
-        plt.ylabel('Optimal k-additivity')
-        plt.title(f'Optimal k-additivity Values by Dataset and Criterion ({representation})')
-        plt.xticks(x, datasets, rotation=45)
-        plt.legend()
-        plt.tight_layout()
-        plt.savefig(os.path.join(main_dir, f"optimal_k_comparison_{representation}.png"), dpi=300)
-        plt.close()
-        
         try:
-            performance_data = summary_df[['dataset', 'max_accuracy', 'noise_robustness', 'stability']]
+            plt.figure(figsize=(14, 8))
+            datasets = summary_df['dataset'].tolist()
+            x = np.arange(len(datasets))
+            width = 0.25
             
-            # Ensure data is numeric (except for dataset column)
+            # Ensure numeric columns are properly converted for plotting
+            k_acc = summary_df['best_k_accuracy'].astype(int).tolist()
+            k_noise = summary_df['best_k_noise'].astype(int).tolist()
+            k_stability = summary_df['best_k_stability'].astype(int).tolist()
+            
+            plt.bar(x - width, k_acc, width, label='Best k (Accuracy)')
+            plt.bar(x, k_noise, width, label='Best k (Noise Robustness)')
+            plt.bar(x + width, k_stability, width, label='Best k (Stability)')
+            
+            plt.xlabel('Dataset')
+            plt.ylabel('Optimal k-additivity')
+            plt.title(f'Optimal k-additivity Values by Dataset and Criterion ({representation})')
+            plt.xticks(x, datasets, rotation=45)
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(os.path.join(main_dir, f"optimal_k_comparison_{representation}.png"), dpi=300)
+            plt.close()
+        except Exception as e:
+            print(f"Error creating k comparison plot: {e}")
+        
+        # Create performance heatmap
+        try:
+            # Create a copy to avoid modifying the original
+            perf_df = summary_df[['dataset', 'max_accuracy', 'noise_robustness', 'stability']].copy()
+            
+            # Force conversion to numeric types
             for col in ['max_accuracy', 'noise_robustness', 'stability']:
-                performance_data[col] = pd.to_numeric(performance_data[col], errors='coerce')
+                perf_df[col] = pd.to_numeric(perf_df[col], errors='coerce')
             
-            # Fill any remaining NaN values
-            performance_data = performance_data.fillna(0)
+            # Fill NaN values with zeros
+            perf_df = perf_df.fillna(0)
             
-            performance_data = performance_data.set_index('dataset')
-            performance_data.columns = ['Accuracy', 'Noise Robustness', 'Stability (Lower is Better)']
+            # Set dataset as index and rename columns for clarity
+            perf_df = perf_df.set_index('dataset')
+            perf_df.columns = ['Accuracy', 'Noise Robustness', 'Stability']
             
             # Invert stability so higher is better (for consistent coloring)
-            performance_data['Stability (Lower is Better)'] = -performance_data['Stability (Lower is Better)']
+            # But only if it contains valid numeric data
+            if pd.to_numeric(perf_df['Stability'], errors='coerce').notna().any():
+                perf_df['Stability'] = -perf_df['Stability']
             
+            # Create the heatmap
             plt.figure(figsize=(10, 8))
-            sns.heatmap(performance_data, annot=True, cmap='YlGnBu', linewidths=.5)
+            sns.heatmap(perf_df, annot=True, cmap='YlGnBu', linewidths=.5, fmt='.4f')
             plt.title(f'Performance Metrics by Dataset ({representation})')
             plt.tight_layout()
             plt.savefig(os.path.join(main_dir, f"dataset_performance_comparison_{representation}.png"), dpi=300)
             plt.close()
         except Exception as e:
             print(f"Error creating performance heatmap: {e}")
+            import traceback
+            traceback.print_exc()
         
         print(f"Cross-dataset comparison completed. Results saved to: {main_dir}")
     else:
