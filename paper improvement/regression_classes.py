@@ -528,18 +528,24 @@ class ChoquisticRegression_Composition(BaseEstimator, ClassifierMixin):
     def _transform_data(self, X):
         """Transform input data through scaling and Choquet transformation."""
         check_is_fitted(self, ["transformer_"])
+        X = check_array(X)
         
-        if X.shape[1] != self.n_features_in_:
-            raise ValueError(f"X has {X.shape[1]} features, but ChoquisticRegression is expecting "
-                            f"{self.n_features_in_} features.")
+        # Modified check to handle both original and already-transformed data
+        # If X has the original number of features, transform it
+        if X.shape[1] == self.n_features_in_:
+            # Apply scaling if configured
+            X_scaled = self.scaler_.transform(X) if self.scale_data else X
+            return self.transformer_.transform(X_scaled)
         
-        # Apply scaling if configured
-        if self.scale_data:
-            X_scaled = self.scaler_.transform(X)
+        # If X already has the transformed dimension, pass it through
+        elif hasattr(self, 'transformed_n_features_in_') and X.shape[1] == self.transformed_n_features_in_:
+            return X
+            
+        # Otherwise, it's an error
         else:
-            X_scaled = X
-        
-        return self.transformer_.transform(X_scaled)
+            raise ValueError(f"X has {X.shape[1]} features but expected either "
+                            f"{self.n_features_in_} (original) or "
+                            f"{getattr(self, 'transformed_n_features_in_', 'unknown')} (transformed)")
     
     def get_model_capacity(self):
         """
@@ -695,12 +701,25 @@ class ChoquisticRegression_Inheritance(LogisticRegression):
         return super().fit(X_transformed, y)
 
     def _transform(self, X):
+        """Transform input data using the chosen method."""
         check_is_fitted(self, ["original_n_features_in_", "transformer_"])
         X = check_array(X)
-        if X.shape[1] != self.original_n_features_in_:
-            raise ValueError(f"X has {X.shape[1]} features but expected {self.original_n_features_in_}")
-        X_scaled = self.scaler_.transform(X) if self.scale_data else X
-        return self.transformer_.transform(X_scaled)
+        
+        # Modified check to handle both original and already-transformed data
+        # If X has the original number of features, transform it
+        if X.shape[1] == self.original_n_features_in_:
+            X_scaled = self.scaler_.transform(X) if self.scale_data else X
+            return self.transformer_.transform(X_scaled)
+        
+        # If X already has the transformed dimension, pass it through
+        elif hasattr(self, 'transformed_n_features_in_') and X.shape[1] == self.transformed_n_features_in_:
+            return X
+            
+        # Otherwise, it's an error
+        else:
+            raise ValueError(f"X has {X.shape[1]} features but expected either "
+                            f"{self.original_n_features_in_} (original) or "
+                            f"{getattr(self, 'transformed_n_features_in_', 'unknown')} (transformed)")
 
     def predict(self, X):
         return super().predict(self._transform(X))
