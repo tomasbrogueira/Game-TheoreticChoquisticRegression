@@ -910,12 +910,12 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     return all_results
 
 if __name__ == "__main__":
-    datasets = [ 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
+    datasets = ['dados_covid_sbpo_atual', 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
     
     # Choose the representation type - can be "game" or "mobius"
     representations = ["game", "mobius"]
 
-    run_k_additivity = False
+    run_k_additivity = True
     run_feature_dropout = True
     max_features_to_drop = 2  
 

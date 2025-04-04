@@ -3,5 +3,5 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR dados_covid_sbpo_atual (game)
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
 - Best k for accuracy efficiency: 1 (eff: 0.4556, params: 10)
-- Best k for noise robustness efficiency: 1 (eff: 0.4555, params: 10)
-- Best k for stability efficiency: 8 (eff: -0.0011, params: 511)
+- Best k for noise robustness efficiency: 1 (eff: 0.4543, params: 10)
+- Best k for stability efficiency: 1 (eff: 0.7660, params: 10)

@@ -3,5 +3,5 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR dados_covid_sbpo_atual (mobius)
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
 - Best k for accuracy efficiency: 1 (eff: 0.5277, params: 10)
-- Best k for noise robustness efficiency: 1 (eff: 0.5260, params: 10)
-- Best k for stability efficiency: 6 (eff: -0.0010, params: 466)
+- Best k for noise robustness efficiency: 1 (eff: 0.5257, params: 10)
+- Best k for stability efficiency: 1 (eff: 0.7661, params: 10)
