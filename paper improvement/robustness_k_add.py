@@ -634,13 +634,315 @@ def run_batch_analysis(datasets_list, representation="game"):
         import traceback
         traceback.print_exc()
 
+def feature_dropout_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=0, max_features_to_drop=None):
+    """
+    Perform feature dropout analysis for different k-additivity values.
+    For each k, test model performance when dropping features systematically.
+    
+    Parameters:
+    -----------
+    dataset_name : str
+        Name of the dataset to analyze
+    representation : str, default="game"
+        Choquet representation to use, either "game" or "mobius"
+    output_dir : str, optional
+        Directory to save results
+    test_size : float, default=0.3
+        Proportion of data to use for testing
+    random_state : int, default=0
+        Random seed for reproducibility
+    max_features_to_drop : int, optional
+        Maximum number of features to drop (to limit combinatorial explosion)
+    """
+    from itertools import combinations
+    
+    # Validate representation parameter
+    if representation not in ["game", "mobius"]:
+        raise ValueError(f"Invalid representation '{representation}'. Use 'game' or 'mobius'.")
+        
+    print(f"\n{'='*80}\nPerforming feature dropout analysis: {dataset_name} with {representation} representation\n{'='*80}")
+    
+    # Create output directory - now within the k-additivity structure
+    if output_dir is None:
+        # Create within the same folder structure as k-additivity analysis
+        base_dir = f"k_additivity_analysis_{representation}/{dataset_name}"
+        output_dir = os.path.join(base_dir, f"featuredropout{dataset_name}")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Load and prepare data
+    X, y = func_read_data(dataset_name)
+    nSamp, nAttr = X.shape
+    
+    # Limit the maximum features to drop to prevent combinatorial explosion
+    if max_features_to_drop is None:
+        max_features_to_drop = min(3, nAttr - 1)  # Default: drop at most 3 features or leave at least 1
+    else:
+        max_features_to_drop = min(max_features_to_drop, nAttr - 1)  # Ensure at least 1 feature remains
+    
+    print(f"Dataset: {dataset_name}")
+    print(f"- Representation: {representation}")
+    print(f"- Number of samples: {nSamp}")
+    print(f"- Number of attributes: {nAttr}")
+    print(f"- Will drop up to {max_features_to_drop} features")
+    
+    # Split data into train/test sets
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+    
+    # Convert to numpy arrays
+    X_train_values = X_train.values if isinstance(X_train, pd.DataFrame) else X_train
+    X_test_values = X_test.values if isinstance(X_test, pd.DataFrame) else X_test
+    y_train_values = y_train.values if isinstance(y_train, pd.Series) else y_train
+    y_test_values = y_test.values if isinstance(y_test, pd.Series) else y_test
+    
+    # Scale the data
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train_values)
+    X_test_scaled = scaler.transform(X_test_values)
+    
+    # Select the appropriate transformation function
+    choquet_transform = choquet_k_additive_game if representation == "game" else choquet_k_additive_mobius
+    
+    # Dictionary to store results for each k value
+    all_results = {}
+    
+    # For each k value
+    for k in range(1, nAttr + 1):
+        print(f"\nAnalyzing k = {k}/{nAttr} with feature dropout...")
+        
+        # Only test feature combinations that make sense for this k
+        # For k-additivity, we need at least k features
+        min_features_needed = k
+        max_features_to_drop_k = min(max_features_to_drop, nAttr - min_features_needed)
+        
+        if max_features_to_drop_k < 0:
+            print(f"- Skipping k={k}: requires at least {min_features_needed} features")
+            continue
+        
+        # Generate all feature dropout combinations to test
+        all_feature_sets = []
+        
+        # Start with full feature set
+        all_feature_indices = list(range(nAttr))
+        all_feature_sets.append(all_feature_indices)
+        
+        # Then add combinations with dropped features
+        for n_drop in range(1, max_features_to_drop_k + 1):
+            for dropped_indices in combinations(range(nAttr), n_drop):
+                kept_indices = [i for i in range(nAttr) if i not in dropped_indices]
+                if len(kept_indices) >= min_features_needed:
+                    all_feature_sets.append(kept_indices)
+        
+        n_combos = len(all_feature_sets)
+        print(f"- Testing {n_combos} feature combinations")
+        
+        # Results for this k value
+        k_results = []
+        
+        # Test each feature combination
+        for i, feature_indices in enumerate(all_feature_sets):
+            if i % max(1, n_combos // 10) == 0:  # Progress update
+                print(f"  Progress: {i}/{n_combos} combinations")
+            
+            # Create dataset with only selected features
+            X_train_subset = X_train_scaled[:, feature_indices]
+            X_test_subset = X_test_scaled[:, feature_indices]
+            
+            try:
+                # Apply Choquet transformation
+                X_train_choquet = choquet_transform(X_train_subset, k_add=k)
+                
+                # Train logistic regression on transformed data
+                model = LogisticRegression(
+                    max_iter=1000, 
+                    random_state=random_state,
+                    solver="newton-cg"
+                )
+                model.fit(X_train_choquet, y_train_values)
+                
+                # Transform test data and evaluate
+                X_test_choquet = choquet_transform(X_test_subset, k_add=k)
+                y_pred = model.predict(X_test_choquet)
+                accuracy = accuracy_score(y_test_values, y_pred)
+                
+                # Store results
+                k_results.append({
+                    'k_value': k,
+                    'feature_combination': str(feature_indices),
+                    'features_kept': len(feature_indices),
+                    'features_dropped': nAttr - len(feature_indices),
+                    'kept_indices': ','.join(map(str, feature_indices)),
+                    'accuracy': accuracy,
+                    'n_params': nParam_kAdd(k, len(feature_indices))
+                })
+                
+            except Exception as e:
+                print(f"  Error with features {feature_indices}: {str(e)}")
+        
+        # Convert results to DataFrame and sort by accuracy
+        if k_results:
+            results_df = pd.DataFrame(k_results)
+            results_df = results_df.sort_values('accuracy', ascending=False)
+            
+            # Save results for this k
+            all_results[k] = results_df
+            
+            # Save to CSV
+            results_df.to_csv(os.path.join(output_dir, f"dropout_k{k}.csv"), index=False)
+            
+            # Create visualization of top and bottom performing combinations
+            top_n = min(10, len(results_df))
+            if top_n > 0:
+                # Top combinations
+                plt.figure(figsize=(12, 8))
+                top_df = results_df.head(top_n)
+                plt.bar(range(len(top_df)), top_df['accuracy'])
+                plt.xticks(range(len(top_df)), top_df['kept_indices'], rotation=90)
+                plt.title(f'Top {top_n} Feature Combinations (k={k}, {representation} representation)')
+                plt.xlabel('Kept Features')
+                plt.ylabel('Accuracy')
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, f"top_combinations_k{k}_{representation}.png"), dpi=300)
+                plt.close()
+                
+                # Distribution of accuracies
+                plt.figure(figsize=(10, 6))
+                # Use standard vertical orientation with accuracy on x-axis
+                sns.histplot(x=results_df['accuracy'], kde=True, bins=15, color='skyblue')
+                # Use vertical reference lines
+                plt.axvline(results_df['accuracy'].mean(), color='r', linestyle='--', linewidth=2,
+                        label=f'Mean: {results_df["accuracy"].mean():.4f}')
+                plt.axvline(results_df['accuracy'].max(), color='g', linestyle='--', linewidth=2,
+                        label=f'Max: {results_df["accuracy"].max():.4f}')
+                plt.title(f'Distribution of Accuracy Scores for k={k} ({dataset_name}, {representation} repr.)', fontsize=14)
+                # Set labels correctly for vertical histogram
+                plt.xlabel('Accuracy Value', fontsize=12)
+                plt.ylabel('Count of Feature Combinations', fontsize=12)
+                plt.grid(True, alpha=0.3)
+                # Set x-axis limits for accuracy range
+                min_acc = max(0, results_df['accuracy'].min() - 0.05)
+                max_acc = min(1, results_df['accuracy'].max() + 0.05)
+                plt.xlim(min_acc, max_acc)
+                plt.legend(loc='best', frameon=True, framealpha=0.9)
+                plt.tight_layout()
+                plt.savefig(os.path.join(output_dir, f"accuracy_distribution_k{k}_{representation}.png"), dpi=300, bbox_inches='tight')
+                plt.close()
+                
+                # Feature importance based on dropout impact
+                if len(results_df) > 1:
+                    # Create feature impact visualization
+                    # Baseline is the accuracy with all features
+                    baseline = results_df[results_df['features_dropped'] == 0]['accuracy'].values[0]
+                    feature_impact = np.zeros(nAttr)
+                    
+                    # For each feature, calculate average impact when it's removed
+                    for feature_idx in range(nAttr):
+                        # Find combinations where this feature is dropped
+                        dropped_combinations = [row for _, row in results_df.iterrows() 
+                                             if feature_idx not in map(int, row['kept_indices'].split(','))]
+                        
+                        if dropped_combinations:
+                            # Average accuracy when this feature is dropped
+                            avg_acc_without = np.mean([row['accuracy'] for row in dropped_combinations])
+                            # Impact is difference from baseline
+                            feature_impact[feature_idx] = baseline - avg_acc_without
+                    
+                    # Plot feature importance
+                    plt.figure(figsize=(10, 6))
+                    plt.bar(range(nAttr), feature_impact)
+                    plt.xticks(range(nAttr), [f'Feature {i}' for i in range(nAttr)])
+                    plt.title(f'Feature Impact Analysis (k={k}, {representation} representation)')
+                    plt.xlabel('Feature')
+                    plt.ylabel('Impact on Accuracy')
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(output_dir, f"feature_impact_k{k}_{representation}.png"), dpi=300)
+                    plt.close()
+    
+    # Create summary across all k values
+    if all_results:
+        summary_rows = []
+        for k, df in all_results.items():
+            best_row = df.iloc[0]
+            full_features_row = df[df['features_dropped'] == 0].iloc[0] if any(df['features_dropped'] == 0) else None
+            
+            summary_row = {
+                'k_value': k,
+                'best_accuracy': best_row['accuracy'],
+                'best_feature_set': best_row['kept_indices'],
+                'best_n_features': best_row['features_kept'],
+            }
+            
+            if full_features_row is not None:
+                summary_row['full_accuracy'] = full_features_row['accuracy']
+                summary_row['accuracy_improvement'] = best_row['accuracy'] - full_features_row['accuracy']
+            
+            summary_rows.append(summary_row)
+        
+        summary_df = pd.DataFrame(summary_rows)
+        summary_df.to_csv(os.path.join(output_dir, f"dropout_summary_{representation}.csv"), index=False)
+        
+        # Summary plot
+        plt.figure(figsize=(12, 8))
+        plt.plot(summary_df['k_value'], summary_df['best_accuracy'], 'o-', label='Best Feature Subset')
+        if 'full_accuracy' in summary_df.columns:
+            plt.plot(summary_df['k_value'], summary_df['full_accuracy'], 's--', label='All Features')
+        
+        plt.title(f'Feature Dropout Analysis Summary ({dataset_name}, {representation} representation)')
+        plt.xlabel('k-additivity')
+        plt.ylabel('Accuracy')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(output_dir, f"dropout_summary_{representation}.png"), dpi=300)
+        plt.close()
+        
+        # Optimal feature count plot
+        plt.figure(figsize=(10, 6))
+        plt.bar(summary_df['k_value'], summary_df['best_n_features'])
+        plt.title(f'Optimal Number of Features vs k-additivity ({dataset_name}, {representation} representation)')
+        plt.xlabel('k-additivity')
+        plt.ylabel('Optimal Feature Count')
+        plt.savefig(os.path.join(output_dir, f"optimal_feature_count_{representation}.png"), dpi=300)
+        plt.close()
+    
+    print(f"Feature dropout analysis completed. Results saved to: {output_dir}")
+    return all_results
+
 if __name__ == "__main__":
-    datasets = ['dados_covid_sbpo_atual', 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
+    datasets = [ 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
     
     # Choose the representation type - can be "game" or "mobius"
-    representation = "game"
+    representations = ["game", "mobius"]
+
+    run_k_additivity = False
+    run_feature_dropout = True
+    max_features_to_drop = 2  
+
+    for representation in representations:
+        # Create main directory first to ensure it exists
+        main_dir = f"k_additivity_analysis_{representation}"
+        os.makedirs(main_dir, exist_ok=True)
     
-    # Run the analysis with the chosen representation
-    run_batch_analysis(datasets_list=datasets, representation=representation)
-    
-    run_batch_analysis(datasets_list=datasets, representation="mobius")
+        # Run the regular k-additivity analysis
+        if run_k_additivity:
+            print("\nRunning k-additivity analysis...")
+            run_batch_analysis(datasets_list=datasets, representation=representation)
+        
+        # Run feature dropout analysis for each dataset
+        if run_feature_dropout:
+            print("\nRunning feature dropout analysis...")
+            for dataset in datasets:
+                # Create dataset directory if it doesn't exist
+                dataset_dir = os.path.join(main_dir, dataset)
+                os.makedirs(dataset_dir, exist_ok=True)
+                
+                # Run feature dropout with path to store in dataset subdirectory
+                feature_dropout_output_dir = os.path.join(dataset_dir, f"featuredropout{dataset}")
+                
+                feature_dropout_analysis(
+                    dataset, 
+                    representation=representation,
+                    output_dir=feature_dropout_output_dir,
+                    max_features_to_drop=max_features_to_drop
+                )
