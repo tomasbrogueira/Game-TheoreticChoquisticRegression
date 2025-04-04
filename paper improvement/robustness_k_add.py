@@ -325,6 +325,73 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
             f.write("="*60 + "\n\n")
             f.write("No valid results found for any k value.\n")
     
+    # Calculate efficiency metrics (performance/complexity tradeoff)
+    if len(valid_results) > 0:
+        try:
+            # Ensure all necessary columns are numeric
+            for col in ['baseline_accuracy', 'noise_0.3', 'bootstrap_std', 'n_params']:
+                valid_results[col] = pd.to_numeric(valid_results[col], errors='coerce')
+            
+            # Fill any NaN values that might have appeared
+            valid_results = valid_results.fillna({
+                'baseline_accuracy': 0.0,
+                'noise_0.3': 0.0,
+                'bootstrap_std': 1.0,
+                'n_params': 10.0
+            })
+            
+            # Create columns for efficiency metrics using NumPy calculations on numeric data
+            valid_results['acc_efficiency'] = valid_results['baseline_accuracy'] / np.log10(valid_results['n_params'] + 10)
+            valid_results['noise_efficiency'] = valid_results['noise_0.3'] / np.log10(valid_results['n_params'] + 10)
+            valid_results['stability_efficiency'] = valid_results['stability_efficiency'] = (1 - valid_results['bootstrap_std']) / np.log10(valid_results['n_params'] + 10)
+            
+            # Find k values with best efficiency
+            best_k_eff_acc = valid_results['acc_efficiency'].idxmax()
+            best_k_eff_noise = valid_results['noise_efficiency'].idxmax()
+            best_k_eff_stability = valid_results['stability_efficiency'].idxmax()
+            
+            # Add to summary file
+            with open(os.path.join(output_dir, "efficiency_summary.txt"), 'w') as f:
+                f.write(f"COMPLEXITY-EFFICIENCY ANALYSIS FOR {dataset_name} ({representation})\n")
+                f.write("="*60 + "\n\n")
+                f.write("OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):\n")
+                f.write(f"- Best k for accuracy efficiency: {best_k_eff_acc} (eff: {valid_results.loc[best_k_eff_acc, 'acc_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_acc, 'n_params']:.0f})\n")
+                f.write(f"- Best k for noise robustness efficiency: {best_k_eff_noise} (eff: {valid_results.loc[best_k_eff_noise, 'noise_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_noise, 'n_params']:.0f})\n")
+                f.write(f"- Best k for stability efficiency: {best_k_eff_stability} (eff: {valid_results.loc[best_k_eff_stability, 'stability_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_stability, 'n_params']:.0f})\n")
+            
+            # Create efficiency plot
+            plt.figure(figsize=(12, 8))
+            plt.plot(valid_results.index, valid_results['acc_efficiency'], 'o-', label='Accuracy Efficiency')
+            plt.plot(valid_results.index, valid_results['noise_efficiency'], 's-', label='Noise Robustness Efficiency')
+            plt.plot(valid_results.index, valid_results['stability_efficiency'], '^-', label='Stability Efficiency')
+            
+            plt.title(f'Efficiency Metrics vs k-additivity ({dataset_name}, {representation})')
+            plt.xlabel('k-additivity')
+            plt.ylabel('Efficiency (Performance/log(Parameters))')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plt.savefig(os.path.join(output_dir, "efficiency_vs_k.png"), dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # Save efficiency values
+            results_df['acc_efficiency'] = np.nan
+            results_df['noise_efficiency'] = np.nan
+            results_df['stability_efficiency'] = np.nan
+            
+            # Only fill values for valid k values
+            for k in valid_results.index:
+                results_df.loc[k, 'acc_efficiency'] = valid_results.loc[k, 'acc_efficiency']
+                results_df.loc[k, 'noise_efficiency'] = valid_results.loc[k, 'noise_efficiency']
+                results_df.loc[k, 'stability_efficiency'] = valid_results.loc[k, 'stability_efficiency']
+                
+            # Add most efficient k values to the returned DataFrame for cross-dataset comparison
+            results_df.attrs['best_k_eff_acc'] = best_k_eff_acc
+            results_df.attrs['best_k_eff_noise'] = best_k_eff_noise
+            results_df.attrs['best_k_eff_stability'] = best_k_eff_stability
+            
+        except Exception as e:
+            print(f"Error calculating efficiency metrics: {e}")
+    
     print(f"Analysis completed. Results saved to: {output_dir}")
     return results_df
 
@@ -484,15 +551,91 @@ def run_batch_analysis(datasets_list, representation="game"):
         print(f"Cross-dataset comparison completed. Results saved to: {main_dir}")
     else:
         print("No summary data collected, cannot create comparison plots.")
+    
+    # Create efficiency metrics comparison across datasets
+    try:
+        # Gather efficiency data
+        efficiency_data = []
+        for dataset in datasets:
+            try:
+                # Get the results file
+                results_path = os.path.join(main_dir, dataset, "k_comparison_results.csv")
+                if os.path.exists(results_path):
+                    df = pd.read_csv(results_path, index_col=0)
+                    
+                    # Calculate efficiency for each dataset and their optimal k values
+                    for row in summary_data:
+                        if row['dataset'] == dataset:
+                            n_attr = row['n_attr']
+                            
+                            # Get k values
+                            best_k_acc = row['best_k_accuracy']
+                            best_k_noise = row['best_k_noise']
+                            best_k_stability = row['best_k_stability']
+                            
+                            # Calculate parameters
+                            params_acc = nParam_kAdd(best_k_acc, n_attr)
+                            params_noise = nParam_kAdd(best_k_noise, n_attr)
+                            params_stability = nParam_kAdd(best_k_stability, n_attr)
+                            
+                            # Calculate efficiency metrics
+                            acc_eff = row['max_accuracy'] / np.log10(params_acc + 10)
+                            robustness_eff = row['noise_robustness'] / np.log10(params_noise + 10)
+                            stability_eff = (1 - row['stability']) / np.log10(params_stability + 10)
+                            
+                            efficiency_data.append({
+                                'dataset': dataset,
+                                'accuracy_efficiency': acc_eff,
+                                'robustness_efficiency': robustness_eff,
+                                'stability_efficiency': stability_eff
+                            })
+                            break
+            except Exception as e:
+                print(f"Error processing efficiency for {dataset}: {e}")
+        
+        if efficiency_data:
+            # Create efficiency DataFrame
+            eff_df = pd.DataFrame(efficiency_data)
+            
+            # Save efficiency summary
+            eff_df.to_csv(os.path.join(main_dir, f"efficiency_summary_{representation}.csv"), index=False)
+            
+            # Create bar chart of efficiency metrics across datasets
+            plt.figure(figsize=(14, 8))
+            datasets = eff_df['dataset'].tolist()
+            x = np.arange(len(datasets))
+            width = 0.25
+            
+            plt.bar(x - width, eff_df['accuracy_efficiency'], width, label='Accuracy Efficiency')
+            plt.bar(x, eff_df['robustness_efficiency'], width, label='Robustness Efficiency')
+            plt.bar(x + width, eff_df['stability_efficiency'], width, label='Stability Efficiency')
+            
+            plt.xlabel('Dataset')
+            plt.ylabel('Efficiency (Performance/log(Parameters))')
+            plt.title(f'Performance-Complexity Tradeoff by Dataset ({representation})')
+            plt.xticks(x, datasets, rotation=45)
+            plt.legend()
+            plt.tight_layout()
+            plt.savefig(os.path.join(main_dir, f"efficiency_comparison_{representation}.png"), dpi=300)
+            plt.close()
+            
+            # Create efficiency heatmap
+            eff_heatmap = eff_df.set_index('dataset')
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(eff_heatmap, annot=True, cmap='YlGnBu', linewidths=.5, fmt='.4f')
+            plt.title(f'Performance-Complexity Efficiency by Dataset ({representation})')
+            plt.tight_layout()
+            plt.savefig(os.path.join(main_dir, f"efficiency_heatmap_{representation}.png"), dpi=300)
+            plt.close()
+            
+            print(f"Efficiency metrics analysis completed for {representation}")
+    except Exception as e:
+        print(f"Error creating efficiency comparison: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    datasets = [
-        'diabetes', 
-        'banknotes', 
-        'transfusion', 
-        'mammographic',
-        'skin'
-    ]
+    datasets = ['dados_covid_sbpo_atual', 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
     
     # Choose the representation type - can be "game" or "mobius"
     representation = "game"
@@ -500,5 +643,4 @@ if __name__ == "__main__":
     # Run the analysis with the chosen representation
     run_batch_analysis(datasets_list=datasets, representation=representation)
     
-    print("\n\nRunning analysis with Möbius representation...")
     run_batch_analysis(datasets_list=datasets, representation="mobius")

@@ -1,0 +1,22 @@
+K-ADDITIVITY ANALYSIS SUMMARY FOR rice (mobius)
+============================================================
+
+Dataset: rice
+Representation: mobius
+Number of attributes: 7
+Number of samples: 4360
+
+OPTIMAL K VALUES:
+- Best k for accuracy: 3 (accuracy: 0.9266)
+- Best k for noise robustness: 1 (accuracy at noise 0.3: 0.9135)
+- Best k for stability: 4 (std dev: 0.0074)
+
+FULL RESULTS TABLE:
+  k_value n_params train_time baseline_accuracy noise_0.05 noise_0.1 noise_0.2 noise_0.3 bootstrap_mean bootstrap_std
+1       1        8   0.004997          0.922018   0.921407   0.92156  0.920642  0.913456       0.921874      0.008062
+2       2       29   0.025625          0.925076   0.925229  0.921407   0.90841  0.892508       0.926463      0.007978
+3       3       64    0.06572          0.926606   0.922324  0.918654  0.903364  0.885168       0.927113      0.007838
+4       4       99   0.096257          0.926606   0.924159  0.917278  0.897248  0.877982       0.924627      0.007419
+5       5      120    0.14096          0.926606   0.923547  0.917584  0.901376  0.877217       0.925774       0.00838
+6       6      127   0.163936          0.926606   0.923547  0.917737  0.899235  0.878135       0.926788      0.008155
+7       7      128   0.170341          0.926606   0.926147  0.918502  0.901223  0.882569       0.927476      0.009537

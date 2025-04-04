@@ -1,0 +1,7 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR mammographic (mobius)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 1 (eff: 0.6915, params: 5)
+- Best k for noise robustness efficiency: 1 (eff: 0.6756, params: 5)
+- Best k for stability efficiency: 4 (eff: -0.0159, params: 16)
