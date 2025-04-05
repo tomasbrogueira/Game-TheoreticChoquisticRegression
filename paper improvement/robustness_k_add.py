@@ -21,7 +21,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LogisticRegression
 
 
-def direct_k_additivity_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=42):
+def direct_k_additivity_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=42, regularization='l2'):
     """
     Complete analysis of k-additivity impact using a direct implementation without 
     relying on the problematic ChoquisticRegression class.
@@ -38,6 +38,8 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
         Proportion of data to use for testing
     random_state : int, default=42
         Random seed for reproducibility
+    regularization : str, default='l2'
+        Regularization type for logistic regression ('l1', 'l2', 'elasticnet', or 'none')
     """
     # Validate representation parameter
     if representation not in ["game", "mobius"]:
@@ -120,7 +122,8 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
             model = LogisticRegression(
                 max_iter=1000, 
                 random_state=random_state,
-                solver="newton-cg"
+                solver="newton-cg" if regularization in ['l2', 'none'] else "saga",
+                penalty=None if regularization == 'none' else regularization
             )
             model.fit(X_train_choquet, y_train_values)
             train_time = time.time() - start_time
@@ -395,7 +398,7 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
     print(f"Analysis completed. Results saved to: {output_dir}")
     return results_df
 
-def run_batch_analysis(datasets_list, representation="game"):
+def run_batch_analysis(datasets_list, representation="game", regularization='l2'):
     """
     Run k-additivity analysis on multiple datasets.
     
@@ -405,9 +408,14 @@ def run_batch_analysis(datasets_list, representation="game"):
         List of dataset names to analyze
     representation : str, default="game"
         Choquet representation to use, either "game" or "mobius"
+    regularization : str, default='l2'
+        Regularization type for logistic regression ('l1', 'l2', 'elasticnet', or 'none')
     """
-    # Create main directory with simplified naming (no timestamp)
-    main_dir = f"k_additivity_analysis_{representation}"
+    # Create regularization string for folder naming
+    reg_str = "none" if regularization is None else regularization
+    
+    # Create main directory with both representation and regularization
+    main_dir = f"k_additivity_analysis_{representation}_{reg_str}"
     os.makedirs(main_dir, exist_ok=True)
     
     # Datasets to analyze
@@ -427,7 +435,8 @@ def run_batch_analysis(datasets_list, representation="game"):
             results = direct_k_additivity_analysis(
                 dataset, 
                 representation=representation,
-                output_dir=dataset_dir
+                output_dir=dataset_dir,
+                regularization=regularization
             )
             
             # Only extract metrics if there are valid results
@@ -634,7 +643,7 @@ def run_batch_analysis(datasets_list, representation="game"):
         import traceback
         traceback.print_exc()
 
-def feature_dropout_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=0, max_features_to_drop=None):
+def feature_dropout_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=0, max_features_to_drop=None, regularization='l2'):
     """
     Perform feature dropout analysis for different k-additivity values.
     For each k, test model performance when dropping features systematically.
@@ -653,6 +662,8 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
         Random seed for reproducibility
     max_features_to_drop : int, optional
         Maximum number of features to drop (to limit combinatorial explosion)
+    regularization : str, default='l2'
+        Regularization type for logistic regression ('l1', 'l2', 'elasticnet', or 'none')
     """
     from itertools import combinations
     
@@ -666,7 +677,7 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     if output_dir is None:
         # Create within the same folder structure as k-additivity analysis
         base_dir = f"k_additivity_analysis_{representation}/{dataset_name}"
-        output_dir = os.path.join(base_dir, f"featuredropout{dataset_name}")
+        output_dir = os.path.join(base_dir, f"feature_dropout{dataset_name}")
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -758,7 +769,8 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
                 model = LogisticRegression(
                     max_iter=1000, 
                     random_state=random_state,
-                    solver="newton-cg"
+                    solver="newton-cg" if regularization in ['l2', 'none'] else "saga",
+                    penalty=None if regularization == 'none' else regularization
                 )
                 model.fit(X_train_choquet, y_train_values)
                 
@@ -914,35 +926,46 @@ if __name__ == "__main__":
     
     # Choose the representation type - can be "game" or "mobius"
     representations = ["game", "mobius"]
+    
+    # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
+    regularizations = [None,'l2']
 
     run_k_additivity = True
     run_feature_dropout = True
     max_features_to_drop = 2  
 
+    # Loop through both representations and regularizations
     for representation in representations:
-        # Create main directory first to ensure it exists
-        main_dir = f"k_additivity_analysis_{representation}"
-        os.makedirs(main_dir, exist_ok=True)
-    
-        # Run the regular k-additivity analysis
-        if run_k_additivity:
-            print("\nRunning k-additivity analysis...")
-            run_batch_analysis(datasets_list=datasets, representation=representation)
+        for regularization in regularizations:
+            # Create regularization string for folder naming
+            reg_str = "none" if regularization is None else regularization
+            
+            # Create main directory with both representation and regularization
+            main_dir = f"k_additivity_analysis_{representation}_{reg_str}"
+            os.makedirs(main_dir, exist_ok=True)
+            
+            print(f"\n{'-'*80}\nAnalyzing with {representation} representation and {reg_str} regularization\n{'-'*80}")
         
-        # Run feature dropout analysis for each dataset
-        if run_feature_dropout:
-            print("\nRunning feature dropout analysis...")
-            for dataset in datasets:
-                # Create dataset directory if it doesn't exist
-                dataset_dir = os.path.join(main_dir, dataset)
-                os.makedirs(dataset_dir, exist_ok=True)
-                
-                # Run feature dropout with path to store in dataset subdirectory
-                feature_dropout_output_dir = os.path.join(dataset_dir, f"featuredropout{dataset}")
-                
-                feature_dropout_analysis(
-                    dataset, 
-                    representation=representation,
-                    output_dir=feature_dropout_output_dir,
-                    max_features_to_drop=max_features_to_drop
-                )
+            # Run the regular k-additivity analysis
+            if run_k_additivity:
+                print("\nRunning k-additivity analysis...")
+                run_batch_analysis(datasets_list=datasets, representation=representation, regularization=regularization)
+            
+            # Run feature dropout analysis for each dataset
+            if run_feature_dropout:
+                print("\nRunning feature dropout analysis...")
+                for dataset in datasets:
+                    # Create dataset directory if it doesn't exist
+                    dataset_dir = os.path.join(main_dir, dataset)
+                    os.makedirs(dataset_dir, exist_ok=True)
+                    
+                    # Run feature dropout with path to store in dataset subdirectory
+                    feature_dropout_output_dir = os.path.join(dataset_dir, f"featuredropout{dataset}")
+                    
+                    feature_dropout_analysis(
+                        dataset, 
+                        representation=representation,
+                        output_dir=feature_dropout_output_dir,
+                        max_features_to_drop=max_features_to_drop,
+                        regularization=regularization
+                    )

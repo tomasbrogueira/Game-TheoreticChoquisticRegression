@@ -1,0 +1,6 @@
+Dataset: dados_covid_sbpo_atual
+Representation: game
+Number of samples: 87446
+Number of attributes: 9
+Train samples: 61212
+Test samples: 26234

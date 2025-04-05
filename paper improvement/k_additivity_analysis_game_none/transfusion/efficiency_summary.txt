@@ -1,0 +1,7 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR transfusion (game)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 1 (eff: 0.5718, params: 5)
+- Best k for noise robustness efficiency: 1 (eff: 0.5673, params: 5)
+- Best k for stability efficiency: 1 (eff: 0.8244, params: 5)

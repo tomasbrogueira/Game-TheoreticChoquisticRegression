@@ -1,0 +1,6 @@
+Dataset: skin
+Representation: mobius
+Number of samples: 388396
+Number of attributes: 4
+Train samples: 271877
+Test samples: 116519
