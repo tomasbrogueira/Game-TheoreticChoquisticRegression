@@ -331,10 +331,6 @@ If you encounter import errors like `ModuleNotFoundError: No module named 'core'
 
 If you encounter errors related to missing datasets, make sure you've copied all required dataset files to the `data/` directory.
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
