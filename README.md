@@ -240,7 +240,7 @@ plot_noise_robustness(
 )
 ```
 
-## Visualization
+## Visualization (not yet functional for all basis)
 
 The project includes specialized visualization functions for each representation basis:
 
