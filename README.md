@@ -326,7 +326,3 @@ If you encounter import errors like `ModuleNotFoundError: No module named 'core'
    import os
    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
    ```
-
-### Missing Datasets
-
-If you encounter errors related to missing datasets, make sure you've copied all required dataset files to the `data/` directory.
