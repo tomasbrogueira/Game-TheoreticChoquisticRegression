@@ -10,6 +10,20 @@ from imblearn.over_sampling import RandomOverSampler
 def func_read_data(data_imp):
     # Base directory for datasets
     data_dir = "data"
+    # Synthetic datasets paths
+    synthetic_paths = {
+        "pairwise_interaction": "pairwise_interaction_dataset.csv",
+        "exponentially_weighted_interaction": "exponentially_weighted_interaction_dataset.csv",
+        "extreme_coalition": "extreme_coalition_dataset.csv",
+        "hierarchical_interaction": "hierarchical_interaction_dataset.csv",
+        "high_dimensional_complex": "high_dimensional_complex_dataset.csv",
+        "higher_order_5_interaction": "higher_order_5_interaction_dataset.csv",
+        "higher_order_6_interaction": "higher_order_6_interaction_dataset.csv",
+        "mixed_higher_order_interaction": "mixed_higher_order_interaction_dataset.csv",
+        "mixed_interaction": "mixed_interaction_dataset.csv",
+        "nested_interaction": "nested_interaction_dataset.csv",
+        "nonlinear_transformation": "nonlinear_transformation_dataset.csv",
+    }    
 
     if data_imp == "banknotes":
         "Banknote authentication dataset - UCI"
@@ -187,14 +201,27 @@ def func_read_data(data_imp):
         y = pd.to_numeric(dados["test_result"].replace({"Negativo": -1, "Positivo": 1}))
         X = dados.drop(columns=["test_result"]) * 1
 
+    elif data_imp in synthetic_paths:
+        file_path = os.path.join("synthetic_datasets", synthetic_paths[data_imp])
+        
+        # Fast loading with dtype specification to avoid later conversion
+        dataset = pd.read_csv(file_path, comment='#', dtype=np.float64)
+        
+        # Simple splitting without additional processing
+        X = dataset.iloc[:, :-1]
+        y = dataset.iloc[:, -1]
+
+        return X, y
+
     else:
         raise ValueError(
             f"Invalid dataset name: {data_imp}. Please provide a valid dataset name."
         )
 
-    # Over-sampling
-    ros = RandomOverSampler(random_state=42)
-    X, y = ros.fit_resample(X, y)
+    if data_imp not in synthetic_paths:
+        # Over-sampling
+        ros = RandomOverSampler(random_state=42)
+        X, y = ros.fit_resample(X, y)
 
     # One-hot encoding for categorical features
     features_to_encode = X.columns[X.dtypes == object].tolist()

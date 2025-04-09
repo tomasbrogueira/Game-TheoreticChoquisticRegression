@@ -14,7 +14,7 @@ but they have different interpretability properties.
 import numpy as np
 import itertools
 from itertools import chain, combinations
-from math import comb, factorial
+from math import comb
 from sklearn.base import BaseEstimator, TransformerMixin
 import warnings
 

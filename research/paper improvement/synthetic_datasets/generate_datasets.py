@@ -6,25 +6,23 @@ from sklearn.datasets import make_classification
 from sklearn.preprocessing import StandardScaler
 import os
 
-# Set random seed for reproducibility
+# Reproducible results
 np.random.seed(42)
 
 def save_dataset(X, y, filename, description):
-    """Save dataset to CSV with description in header"""
-    # Create DataFrame
+    """Save dataset to CSV with description as a comment"""
     df = pd.DataFrame(X, columns=[f'X{i+1}' for i in range(X.shape[1])])
     df['target'] = y
     
-    # Save to CSV with description as comment
     with open(filename, 'w') as f:
         f.write(f"# {description}\n")
     df.to_csv(filename, mode='a', index=False)
     
-    print(f"Dataset saved to {filename}")
+    print(f"Saved to {filename}")
     return df
 
 def plot_feature_correlations(df, filename):
-    """Plot correlation heatmap for features"""
+    """Plot and save a correlation heatmap"""
     plt.figure(figsize=(12, 10))
     features = df.drop('target', axis=1)
     corr = features.corr()
@@ -35,29 +33,24 @@ def plot_feature_correlations(df, filename):
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
-    print(f"Correlation plot saved to {filename}")
 
 def plot_class_distribution(df, filename):
-    """Plot class distribution"""
+    """Plot and save class distribution"""
     plt.figure(figsize=(8, 6))
     sns.countplot(x='target', data=df)
     plt.title('Class Distribution')
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
-    print(f"Class distribution plot saved to {filename}")
 
 def analyze_dataset(df, name):
-    """Analyze dataset and save plots"""
+    """Analyze dataset and save visualizations and statistics"""
     os.makedirs('plots', exist_ok=True)
     
-    # Plot correlation heatmap
     plot_feature_correlations(df, f'plots/{name}_correlation.png')
-    
-    # Plot class distribution
     plot_class_distribution(df, f'plots/{name}_class_distribution.png')
     
-    # Basic statistics
+    # Calculate statistics
     stats = {
         'n_samples': len(df),
         'n_features': len(df.columns) - 1,
@@ -66,7 +59,6 @@ def analyze_dataset(df, name):
         'feature_stds': df.drop('target', axis=1).std().to_dict()
     }
     
-    # Save statistics
     with open(f'{name}_stats.txt', 'w') as f:
         for key, value in stats.items():
             f.write(f"{key}: {value}\n")
@@ -74,324 +66,307 @@ def analyze_dataset(df, name):
     print(f"Analysis completed for {name}")
     return stats
 
-# 1. Dataset with pairwise interactions
-def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15):
-    """
-    Generate dataset with pairwise interactions between features.
-    This dataset has strong interactions between pairs of features.
-    """
-    # Generate base features
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
+def enhance_class_separation(y_continuous, margin=0.1):
+    """Create binary target with margin around decision boundary"""
+    threshold = np.median(y_continuous)
     
-    # Create binary outcome based on pairwise interactions
+    y_binary = np.zeros(len(y_continuous))
+    y_binary[y_continuous > threshold] = 1
+    
+    # Create mask to exclude samples near the boundary
+    keep_mask = np.abs(y_continuous - threshold) > margin * np.std(y_continuous)
+    
+    return y_binary.astype(int), keep_mask
+
+# 1. Pairwise interactions dataset
+def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15, 
+                                          feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with strong pairwise feature interactions"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Add pairwise interactions that influence the outcome
+    # Create pairwise interactions with strong coefficients
     for i in range(0, n_features-1, 2):
-        # Create interaction terms between consecutive features
-        interaction = X[:, i] * X[:, i+1]
-        y += interaction
+        y += 2.5 * (X[:, i] * X[:, i+1])
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Pairwise Interaction Dataset: Features exhibit strong pairwise interactions. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "The target variable is determined by products of consecutive feature pairs."
+        f"Pairwise interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "pairwise_interaction_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "pairwise_interaction_dataset.csv", description)
+    return X, y_binary, df
 
-# 2. Dataset with higher-order interactions (triplets)
-def generate_triplet_interaction_dataset(n_samples=1000, n_features=15):
-    """
-    Generate dataset with triplet interactions between features.
-    This dataset has strong interactions between groups of three features.
-    """
-    # Generate base features
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
-    
-    # Create binary outcome based on triplet interactions
+# 2. Triplet interactions dataset
+def generate_triplet_interaction_dataset(n_samples=1000, n_features=15,
+                                        feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with strong triplet feature interactions"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Add triplet interactions that influence the outcome
+    # Create triplet interactions with strong coefficients
     for i in range(0, n_features-2, 3):
         if i+2 < n_features:
-            # Create interaction terms between triplets of features
-            interaction = X[:, i] * X[:, i+1] * X[:, i+2]
-            y += interaction
+            y += 3.5 * (X[:, i] * X[:, i+1] * X[:, i+2])
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Triplet Interaction Dataset: Features exhibit strong triplet interactions. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "The target variable is determined by products of feature triplets."
+        f"Triplet interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "triplet_interaction_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "triplet_interaction_dataset.csv", description)
+    return X, y_binary, df
 
-# 3. Dataset with mixed-order interactions
-def generate_mixed_interaction_dataset(n_samples=1000, n_features=15):
-    """
-    Generate dataset with mixed-order interactions (pairs, triplets, and individual).
-    This dataset has interactions of different orders to test the model's ability to
-    capture different coalition sizes.
-    """
-    # Generate base features
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
-    
-    # Create binary outcome based on mixed interactions
+# 3. Mixed-order interactions dataset
+def generate_mixed_interaction_dataset(n_samples=1000, n_features=15,
+                                     feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with mixed individual, pair, and triplet interactions"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Add individual feature effects (first 3 features)
+    # Individual effects
     for i in range(3):
-        y += 0.5 * X[:, i]
+        y += 1.0 * X[:, i]
     
-    # Add pairwise interactions (next 6 features)
+    # Pairwise interactions
     for i in range(3, 9, 2):
-        interaction = X[:, i] * X[:, i+1]
-        y += interaction
+        y += 2.5 * (X[:, i] * X[:, i+1])
     
-    # Add triplet interactions (next 6 features)
+    # Triplet interactions
     for i in range(9, 15, 3):
         if i+2 < n_features:
-            interaction = X[:, i] * X[:, i+1] * X[:, i+2]
-            y += 1.5 * interaction
+            y += 3.5 * (X[:, i] * X[:, i+1] * X[:, i+2])
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Mixed Interaction Dataset: Features exhibit interactions of different orders. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "The target variable is determined by individual features, pairs, and triplets."
+        f"Mixed interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "mixed_interaction_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "mixed_interaction_dataset.csv", description)
+    return X, y_binary, df
 
-# 4. Dataset with non-linear transformations
-def generate_nonlinear_transformation_dataset(n_samples=1000, n_features=15):
-    """
-    Generate dataset with non-linear transformations of features.
-    This dataset applies various non-linear functions to features.
-    """
-    # Generate base features
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
-    
-    # Create binary outcome based on non-linear transformations
+# 4. Non-linear transformations dataset
+def generate_nonlinear_transformation_dataset(n_samples=1000, n_features=15,
+                                             feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with various non-linear feature transformations"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Add non-linear transformations
-    y += np.sin(X[:, 0] * X[:, 1])  # Sine of product
-    y += np.exp(X[:, 2] * 0.5)  # Exponential
-    y += np.log(np.abs(X[:, 3]) + 1)  # Logarithm
-    y += np.maximum(0, X[:, 4])  # ReLU-like
-    y += X[:, 5]**2  # Quadratic
-    y += X[:, 6]**3  # Cubic
-    y += np.tanh(X[:, 7])  # Hyperbolic tangent
-    y += np.sign(X[:, 8]) * np.sqrt(np.abs(X[:, 8]))  # Signed square root
+    # Various non-linear transformations
+    y += 2.0 * np.sin(X[:, 0] * X[:, 1])  # Sine
+    y += 2.0 * np.exp(X[:, 2] * 0.5)      # Exponential
+    y += 2.0 * np.log(np.abs(X[:, 3]) + 1)  # Log
+    y += 2.0 * np.maximum(0, X[:, 4])     # ReLU
+    y += 2.0 * X[:, 5]**2                 # Quadratic
+    y += 2.0 * X[:, 6]**3                 # Cubic
+    y += 2.0 * np.tanh(X[:, 7])           # Tanh
+    y += 2.0 * np.sign(X[:, 8]) * np.sqrt(np.abs(X[:, 8]))  # Signed sqrt
     
-    # Add pairwise interactions for remaining features
+    # Pairwise interactions for remaining features
     for i in range(9, n_features-1, 2):
         if i+1 < n_features:
-            y += X[:, i] * X[:, i+1]
+            y += 2.5 * (X[:, i] * X[:, i+1])
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Non-linear Transformation Dataset: Features undergo various non-linear transformations. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "The target variable is determined by non-linear functions of features including "
-        "sine, exponential, logarithm, ReLU, polynomial, and hyperbolic tangent."
+        f"Non-linear transformation dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "nonlinear_transformation_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "nonlinear_transformation_dataset.csv", description)
+    return X, y_binary, df
 
-# 5. Dataset with hierarchical interactions
-def generate_hierarchical_interaction_dataset(n_samples=1000, n_features=15):
-    """
-    Generate dataset with hierarchical interactions between features.
-    This dataset has nested interactions where some interactions only matter
-    when other conditions are met.
-    """
-    # Generate base features
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
-    
-    # Create binary outcome based on hierarchical interactions
+# 5. Hierarchical interactions dataset
+def generate_hierarchical_interaction_dataset(n_samples=1000, n_features=15,
+                                             feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with nested conditional interactions"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Create hierarchical conditions
-    condition1 = X[:, 0] > 0  # First condition
-    condition2 = X[:, 1] > 0  # Second condition
+    # Define conditions
+    condition1 = X[:, 0] > 0
+    condition2 = X[:, 1] > 0
     
     # Base effect
     y += 0.5 * X[:, 2]
     
-    # First-level interaction: only applies when condition1 is true
+    # First-level conditional interaction
     mask1 = condition1
     y[mask1] += X[mask1, 3] * X[mask1, 4]
     
-    # Second-level interaction: only applies when both conditions are true
+    # Second-level conditional interaction
     mask2 = condition1 & condition2
     y[mask2] += X[mask2, 5] * X[mask2, 6] * X[mask2, 7]
     
-    # Third-level interaction: applies when neither condition is true
+    # Third-level conditional interaction
     mask3 = ~condition1 & ~condition2
     for i in range(8, n_features):
         y[mask3] += 0.5 * X[mask3, i]
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Hierarchical Interaction Dataset: Features exhibit nested conditional interactions. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "The target variable is determined by hierarchical conditions where some "
-        "interactions only matter when other conditions are met."
+        f"Hierarchical interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "hierarchical_interaction_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "hierarchical_interaction_dataset.csv", description)
+    return X, y_binary, df
 
-# 6. Dataset with high-dimensional sparse interactions
-def generate_sparse_interaction_dataset(n_samples=1000, n_features=20):
-    """
-    Generate dataset with high-dimensional sparse interactions.
-    This dataset has many features but only a few are relevant, with complex interactions.
-    """
-    # Generate base features (more features for this dataset)
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
-    
-    # Create binary outcome based on sparse interactions
+# 6. Sparse high-dimensional interactions dataset
+def generate_sparse_interaction_dataset(n_samples=1000, n_features=20,
+                                       feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with many features but only a few relevant interactions"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Only a few features are relevant
+    # Only 6 features are relevant
     relevant_features = [0, 3, 7, 12, 15, 18]
     
-    # Add individual effects for some relevant features
+    # Individual effects
     y += 0.5 * X[:, relevant_features[0]]
     y += 0.7 * X[:, relevant_features[1]]
     
-    # Add pairwise interaction
-    y += X[:, relevant_features[2]] * X[:, relevant_features[3]]
+    # Pairwise interaction
+    y += 2.5 * (X[:, relevant_features[2]] * X[:, relevant_features[3]])
     
-    # Add triplet interaction
-    y += X[:, relevant_features[3]] * X[:, relevant_features[4]] * X[:, relevant_features[5]]
+    # Triplet interaction
+    y += 3.5 * (X[:, relevant_features[3]] * X[:, relevant_features[4]] * X[:, relevant_features[5]])
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Sparse Interaction Dataset: High-dimensional with sparse relevant interactions. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "Only 6 features are truly relevant, with the rest being noise. "
-        "The target variable is determined by individual effects and interactions "
-        "among the relevant features."
+        f"Sparse interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Only 6 features are relevant. Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "sparse_interaction_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "sparse_interaction_dataset.csv", description)
+    return X, y_binary, df
 
-# 7. Dataset with threshold effects
-def generate_threshold_interaction_dataset(n_samples=1000, n_features=15):
-    """
-    Generate dataset with threshold effects in feature interactions.
-    This dataset has interactions that only become relevant when features cross thresholds.
-    """
-    # Generate base features
-    X = np.random.normal(0, 1, size=(n_samples, n_features))
-    
-    # Create binary outcome based on threshold interactions
+# 7. Threshold effects dataset
+def generate_threshold_interaction_dataset(n_samples=1000, n_features=15,
+                                          feature_var=1.5, noise_level=0.3, margin=0.1):
+    """Generate dataset with interactions that only occur above thresholds"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Define thresholds
+    # Define random thresholds
     thresholds = np.random.uniform(-0.5, 0.5, size=n_features)
     
-    # Add threshold effects
+    # Add threshold-dependent interactions
     for i in range(0, n_features-1, 2):
         if i+1 < n_features:
             # Interaction only matters when both features exceed their thresholds
             mask = (X[:, i] > thresholds[i]) & (X[:, i+1] > thresholds[i+1])
-            y[mask] += X[mask, i] * X[mask, i+1]
+            y[mask] += 2.5 * (X[mask, i] * X[mask, i+1])
     
-    # Add some individual effects
+    # Individual effects for first 5 features
     for i in range(0, 5):
         y += 0.3 * X[:, i]
     
-    # Add some noise
-    y += np.random.normal(0, 0.5, size=n_samples)
+    y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Convert to binary classification
-    y = (y > np.median(y)).astype(int)
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
     
     description = (
-        "Threshold Interaction Dataset: Features interact only when crossing thresholds. "
-        f"Contains {n_features} features with {n_samples} samples. "
-        "The target variable is determined by interactions that only become relevant "
-        "when features exceed certain threshold values."
+        f"Threshold interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
     )
     
-    df = save_dataset(X, y, "threshold_interaction_dataset.csv", description)
-    return X, y, df
+    df = save_dataset(X, y_binary, "threshold_interaction_dataset.csv", description)
+    return X, y_binary, df
 
-# Main function to generate all datasets
 def generate_all_datasets():
     """Generate all synthetic datasets"""
     os.makedirs('plots', exist_ok=True)
     
-    # Generate datasets
     print("Generating pairwise interaction dataset...")
-    _, _, df1 = generate_pairwise_interaction_dataset()
+    _, _, df1 = generate_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df1, "pairwise_interaction")
     
     print("\nGenerating triplet interaction dataset...")
-    _, _, df2 = generate_triplet_interaction_dataset()
+    _, _, df2 = generate_triplet_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df2, "triplet_interaction")
     
     print("\nGenerating mixed interaction dataset...")
-    _, _, df3 = generate_mixed_interaction_dataset()
+    _, _, df3 = generate_mixed_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df3, "mixed_interaction")
     
     print("\nGenerating non-linear transformation dataset...")
-    _, _, df4 = generate_nonlinear_transformation_dataset()
+    _, _, df4 = generate_nonlinear_transformation_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df4, "nonlinear_transformation")
     
     print("\nGenerating hierarchical interaction dataset...")
-    _, _, df5 = generate_hierarchical_interaction_dataset()
+    _, _, df5 = generate_hierarchical_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df5, "hierarchical_interaction")
     
     print("\nGenerating sparse interaction dataset...")
-    _, _, df6 = generate_sparse_interaction_dataset(n_features=20)
+    _, _, df6 = generate_sparse_interaction_dataset(n_features=20, feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df6, "sparse_interaction")
     
     print("\nGenerating threshold interaction dataset...")
-    _, _, df7 = generate_threshold_interaction_dataset()
+    _, _, df7 = generate_threshold_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
     analyze_dataset(df7, "threshold_interaction")
     
     print("\nAll datasets generated successfully!")

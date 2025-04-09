@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore")
 
 from regression_classes import nParam_kAdd, powerset, choquet_k_additive_game, choquet_k_additive_mobius
 from mod_GenFuzzyRegression import func_read_data
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
 
 
@@ -97,7 +97,7 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
     )
     
     # Scale the data
-    scaler = StandardScaler()
+    scaler = MinMaxScaler()
     X_train_scaled = scaler.fit_transform(X_train_values)
     X_test_scaled = scaler.transform(X_test_values)
     
@@ -709,7 +709,7 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     y_test_values = y_test.values if isinstance(y_test, pd.Series) else y_test
     
     # Scale the data
-    scaler = StandardScaler()
+    scaler = MinMaxScaler()
     X_train_scaled = scaler.fit_transform(X_train_values)
     X_test_scaled = scaler.transform(X_test_values)
     
@@ -922,7 +922,17 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     return all_results
 
 if __name__ == "__main__":
-    datasets = ['dados_covid_sbpo_atual', 'banknotes', 'transfusion', 'mammographic', 'raisin', 'rice', 'diabetes', 'skin']
+    datasets = [        "pairwise_interaction",
+        "exponentially_weighted_interaction",
+        "extreme_coalition",
+        "hierarchical_interaction",
+        "high_dimensional_complex",
+        "higher_order_5_interaction",
+        "higher_order_6_interaction",
+        "mixed_higher_order_interaction",
+        "mixed_interaction",
+        "nested_interaction",
+        "nonlinear_transformation",]
     
     # Choose the representation type - can be "game" or "mobius"
     representations = ["game", "mobius"]
