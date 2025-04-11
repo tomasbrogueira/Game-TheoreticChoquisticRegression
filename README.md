@@ -29,6 +29,8 @@ PIC-I/
 │   ├── data_loader.py   # Data loading utilities
 │   └── __init__.py
 ├── tests/               # Testing code
+│   ├── complexity/      # Complexity testing
+│   │   └── complexity.py # Complexity testing framework
 │   ├── robustness/      # Robustness testing
 │   │   └── robustness.py # Robustness testing framework
 │   ├── k_additivity/    # K-additivity analysis
