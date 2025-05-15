@@ -15,13 +15,36 @@ import warnings
 from itertools import combinations
 warnings.filterwarnings("ignore")
 
-from regression_classes import nParam_kAdd, powerset, choquet_k_additive_game, choquet_k_additive_mobius
+from regression_classes import ( nParam_kAdd,
+                                powerset,
+                                choquet_k_additive_game, 
+                                choquet_k_additive_mobius,
+                                choquet_k_additive_shapley,
+                                indices_from_mobius, 
+                                indices_from_shapley
+) 
 from mod_GenFuzzyRegression import func_read_data
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
+from dataset_operations import (add_gaussian_noise, 
+                                add_bias, 
+                                scale_features, 
+                                log_transform, 
+                                power_transform,
+                                tanh_transform, 
+                                threshold_features, 
+                                clip_features
+)
 
 
-def direct_k_additivity_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=42, regularization='l2'):
+def direct_k_additivity_analysis(
+    dataset, 
+    representation="game",
+    output_dir=None,
+    test_size=0.3,
+    random_state=42,
+    regularization='l2'
+):    
     """
     Complete analysis of k-additivity impact using a direct implementation without 
     relying on the problematic ChoquisticRegression class.
@@ -31,7 +54,7 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
     dataset_name : str
         Name of the dataset to analyze
     representation : str, default="game"
-        Choquet representation to use, either "game" or "mobius"
+        Choquet representation to use, either "game", "mobius", or "shapley"
     output_dir : str, optional
         Directory to save results (default: creates timestamped folder)
     test_size : float, default=0.3
@@ -41,11 +64,15 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
     regularization : str, default='l2'
         Regularization type for logistic regression ('l1', 'l2', 'elasticnet', or 'none')
     """
-    # Validate representation parameter
-    if representation not in ["game", "mobius"]:
-        raise ValueError(f"Invalid representation '{representation}'. Use 'game' or 'mobius'.")
-        
-    print(f"\n{'='*80}\nAnalyzing dataset: {dataset_name} with {representation} representation\n{'='*80}")
+    # determine name, X, y
+    if isinstance(dataset, (list, tuple)) and len(dataset) == 3:
+        dataset_name, X, y = dataset
+    else:
+        dataset_name = dataset
+        X, y = func_read_data(dataset_name)
+
+    print(f"\n{'='*80}\nAnalyzing dataset: {dataset_name}...\n{'='*80}")
+
     
     # Create output directory if not specified - simplified naming without timestamp
     if output_dir is None:
@@ -53,8 +80,9 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
     
     os.makedirs(output_dir, exist_ok=True)
     
-    # Load and prepare data
-    X, y = func_read_data(dataset_name)
+    # Load and prepare data (skip if in-memory dataset provided)
+    if not (isinstance(dataset, (list, tuple)) and len(dataset) == 3):
+        X, y = func_read_data(dataset_name)
     nSamp, nAttr = X.shape
     
     # Split data into train/test sets
@@ -102,7 +130,14 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
     X_test_scaled = scaler.transform(X_test_values)
     
     # Select the appropriate transformation function based on representation
-    choquet_transform = choquet_k_additive_game if representation == "game" else choquet_k_additive_mobius
+    if representation == "game":
+        choquet_transform = choquet_k_additive_game
+    elif representation == "mobius":
+        choquet_transform = choquet_k_additive_mobius
+    elif representation == "shapley":
+        choquet_transform = choquet_k_additive_shapley
+    else:
+        raise ValueError(f"Unknown representation: {representation}")
     
     # Train and evaluate a model for each k value
     for k in range(1, nAttr + 1):
@@ -401,247 +436,155 @@ def direct_k_additivity_analysis(dataset_name, representation="game", output_dir
 def run_batch_analysis(datasets_list, representation="game", regularization='l2'):
     """
     Run k-additivity analysis on multiple datasets.
-    
-    Parameters:
-    -----------
-    datasets_list : list
-        List of dataset names to analyze
-    representation : str, default="game"
-        Choquet representation to use, either "game" or "mobius"
-    regularization : str, default='l2'
-        Regularization type for logistic regression ('l1', 'l2', 'elasticnet', or 'none')
+    Supports passing either:
+      - A string dataset name => loaded via func_read_data
+      - An in‑memory tuple (label, X, y)
     """
-    # Create regularization string for folder naming
+    import traceback
+    from mod_GenFuzzyRegression import func_read_data
+
+    # Prepare output folder
     reg_str = "none" if regularization is None else regularization
-    
-    # Create main directory with both representation and regularization
     main_dir = f"k_additivity_analysis_{representation}_{reg_str}"
     os.makedirs(main_dir, exist_ok=True)
-    
-    # Datasets to analyze
-    datasets = datasets_list
-    
-    # Summary data for cross-dataset comparison
+
     summary_data = []
-    
-    # Process each dataset
-    for dataset in datasets:
-        # Create dataset-specific directory
-        dataset_dir = os.path.join(main_dir, dataset)
+
+    # Process each dataset entry
+    for ds in datasets_list:
+        # Unpack label for directory naming
+        if isinstance(ds, (list, tuple)) and len(ds) == 3:
+            label, X_mem, y_mem = ds
+            dataset_ref = ds
+        else:
+            label = ds
+            dataset_ref = ds
+
+        dataset_dir = os.path.join(main_dir, label)
         os.makedirs(dataset_dir, exist_ok=True)
-        
+
         try:
-            # Run analysis with our direct implementation
+            # Run the core analysis
             results = direct_k_additivity_analysis(
-                dataset, 
+                dataset_ref,
                 representation=representation,
                 output_dir=dataset_dir,
                 regularization=regularization
             )
-            
-            # Only extract metrics if there are valid results
+
+            # Collect summary metrics if valid results exist
             valid_results = results.dropna(subset=['baseline_accuracy'])
             if len(valid_results) > 0:
                 try:
-                    # Extract key metrics for summary with error handling
-                    dataset_summary = {'dataset': dataset, 'n_attr': len(results)}
-                    
-                    # Try to get best k for accuracy
-                    try:
-                        best_k_acc = valid_results['baseline_accuracy'].idxmax()
-                        dataset_summary['best_k_accuracy'] = int(best_k_acc)
-                        dataset_summary['max_accuracy'] = float(valid_results.loc[best_k_acc, 'baseline_accuracy'])
-                    except Exception as e:
-                        print(f"Warning: Could not determine best k for accuracy for {dataset}: {e}")
-                        dataset_summary['best_k_accuracy'] = 1
-                        dataset_summary['max_accuracy'] = 0.0
-                    
-                    # Try to get best k for noise robustness
-                    try:
-                        best_k_noise = valid_results['noise_0.3'].idxmax()
-                        dataset_summary['best_k_noise'] = int(best_k_noise)
-                        dataset_summary['noise_robustness'] = float(valid_results.loc[best_k_noise, 'noise_0.3'])
-                    except Exception as e:
-                        print(f"Warning: Could not determine best k for noise robustness for {dataset}: {e}")
-                        dataset_summary['best_k_noise'] = 1
-                        dataset_summary['noise_robustness'] = 0.0
-                    
-                    # Try to get best k for stability
-                    try:
-                        best_k_stability = valid_results['bootstrap_std'].idxmin()
-                        dataset_summary['best_k_stability'] = int(best_k_stability)
-                        dataset_summary['stability'] = float(valid_results.loc[best_k_stability, 'bootstrap_std'])
-                    except Exception as e:
-                        print(f"Warning: Could not determine best k for stability for {dataset}: {e}")
-                        dataset_summary['best_k_stability'] = 1
-                        dataset_summary['stability'] = 1.0  # Higher is worse for stability
-                    
-                    # Add to summary data
-                    summary_data.append(dataset_summary)
-                    
+                    ds_sum = {'dataset': label, 'n_attr': len(results)}
+
+                    # Best k for baseline accuracy
+                    best_k_acc = valid_results['baseline_accuracy'].idxmax()
+                    ds_sum['best_k_accuracy'] = int(best_k_acc)
+                    ds_sum['max_accuracy'] = float(valid_results.loc[best_k_acc, 'baseline_accuracy'])
+
+                    # Best k for noise robustness (noise level 0.3)
+                    best_k_noise = valid_results['noise_0.3'].idxmax()
+                    ds_sum['best_k_noise'] = int(best_k_noise)
+                    ds_sum['noise_robustness'] = float(valid_results.loc[best_k_noise, 'noise_0.3'])
+
+                    # Best k for stability (minimum bootstrap std)
+                    best_k_stab = valid_results['bootstrap_std'].idxmin()
+                    ds_sum['best_k_stability'] = int(best_k_stab)
+                    ds_sum['stability'] = float(valid_results.loc[best_k_stab, 'bootstrap_std'])
+
+                    summary_data.append(ds_sum)
                 except Exception as e:
-                    print(f"Warning: Could not extract summary metrics for {dataset}: {e}")
+                    print(f"Warning: extracting summary for {label} failed: {e}")
             else:
-                print(f"Warning: No valid results for dataset {dataset}")
-            
+                print(f"Warning: No valid results for dataset {label}")
         except Exception as e:
-            print(f"Error processing dataset {dataset}: {str(e)}")
-            import traceback
+            print(f"Error processing dataset {label}: {e}")
             traceback.print_exc()
-    
-    # Create cross-dataset comparison plots
+
+    # Cross-dataset comparison
     if summary_data:
-        # Convert to DataFrame, ensuring all values are proper types
         summary_df = pd.DataFrame(summary_data)
-        
-        # Save raw summary data
         summary_df.to_csv(os.path.join(main_dir, f"datasets_summary_{representation}.csv"), index=False)
-        
-        # Create bar chart comparing optimal k values across datasets
-        try:
-            plt.figure(figsize=(14, 8))
-            datasets = summary_df['dataset'].tolist()
-            x = np.arange(len(datasets))
-            width = 0.25
-            
-            # Ensure numeric columns are properly converted for plotting
-            k_acc = summary_df['best_k_accuracy'].astype(int).tolist()
-            k_noise = summary_df['best_k_noise'].astype(int).tolist()
-            k_stability = summary_df['best_k_stability'].astype(int).tolist()
-            
-            plt.bar(x - width, k_acc, width, label='Best k (Accuracy)')
-            plt.bar(x, k_noise, width, label='Best k (Noise Robustness)')
-            plt.bar(x + width, k_stability, width, label='Best k (Stability)')
-            
-            plt.xlabel('Dataset')
-            plt.ylabel('Optimal k-additivity')
-            plt.title(f'Optimal k-additivity Values by Dataset and Criterion ({representation})')
-            plt.xticks(x, datasets, rotation=45)
-            plt.legend()
-            plt.tight_layout()
-            plt.savefig(os.path.join(main_dir, f"optimal_k_comparison_{representation}.png"), dpi=300)
-            plt.close()
-        except Exception as e:
-            print(f"Error creating k comparison plot: {e}")
-        
-        # Create performance heatmap
-        try:
-            # Create a copy to avoid modifying the original
-            perf_df = summary_df[['dataset', 'max_accuracy', 'noise_robustness', 'stability']].copy()
-            
-            # Force conversion to numeric types
-            for col in ['max_accuracy', 'noise_robustness', 'stability']:
-                perf_df[col] = pd.to_numeric(perf_df[col], errors='coerce')
-            
-            # Fill NaN values with zeros
-            perf_df = perf_df.fillna(0)
-            
-            # Set dataset as index and rename columns for clarity
-            perf_df = perf_df.set_index('dataset')
-            perf_df.columns = ['Accuracy', 'Noise Robustness', 'Stability']
-            
-            # Invert stability so higher is better (for consistent coloring)
-            # But only if it contains valid numeric data
-            if pd.to_numeric(perf_df['Stability'], errors='coerce').notna().any():
-                perf_df['Stability'] = -perf_df['Stability']
-            
-            # Create the heatmap
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(perf_df, annot=True, cmap='YlGnBu', linewidths=.5, fmt='.4f')
-            plt.title(f'Performance Metrics by Dataset ({representation})')
-            plt.tight_layout()
-            plt.savefig(os.path.join(main_dir, f"dataset_performance_comparison_{representation}.png"), dpi=300)
-            plt.close()
-        except Exception as e:
-            print(f"Error creating performance heatmap: {e}")
-            import traceback
-            traceback.print_exc()
-        
+
+        # Bar chart: optimal k per criterion
+        plt.figure(figsize=(14, 6))
+        x = np.arange(len(summary_df))
+        width = 0.25
+        plt.bar(x - width, summary_df['best_k_accuracy'], width, label='Best k (Accuracy)')
+        plt.bar(x,          summary_df['best_k_noise'],    width, label='Best k (Noise)')
+        plt.bar(x + width, summary_df['best_k_stability'], width, label='Best k (Stability)')
+        plt.xticks(x, summary_df['dataset'], rotation=45)
+        plt.ylabel('Optimal k-additivity')
+        plt.title(f'Optimal k-additivity by Dataset ({representation})')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(os.path.join(main_dir, f"optimal_k_comparison_{representation}.png"), dpi=300)
+        plt.close()
+
+        # Performance heatmap
+        perf = summary_df.set_index('dataset')[['max_accuracy','noise_robustness','stability']]
+        # invert stability so higher is better
+        perf['stability'] = -perf['stability']
+        plt.figure(figsize=(10, 6))
+        sns.heatmap(perf, annot=True, cmap='YlGnBu', fmt='.4f', linewidths=.5)
+        plt.title(f'Performance Metrics by Dataset ({representation})')
+        plt.tight_layout()
+        plt.savefig(os.path.join(main_dir, f"dataset_performance_comparison_{representation}.png"), dpi=300)
+        plt.close()
+
         print(f"Cross-dataset comparison completed. Results saved to: {main_dir}")
     else:
-        print("No summary data collected, cannot create comparison plots.")
-    
-    # Create efficiency metrics comparison across datasets
+        print("No summary data collected; skipping cross-dataset comparison.")
+
+    # Efficiency comparison
     try:
-        # Gather efficiency data
         efficiency_data = []
-        for dataset in datasets:
-            try:
-                # Get the results file
-                results_path = os.path.join(main_dir, dataset, "k_comparison_results.csv")
-                if os.path.exists(results_path):
-                    df = pd.read_csv(results_path, index_col=0)
-                    
-                    # Calculate efficiency for each dataset and their optimal k values
-                    for row in summary_data:
-                        if row['dataset'] == dataset:
-                            n_attr = row['n_attr']
-                            
-                            # Get k values
-                            best_k_acc = row['best_k_accuracy']
-                            best_k_noise = row['best_k_noise']
-                            best_k_stability = row['best_k_stability']
-                            
-                            # Calculate parameters
-                            params_acc = nParam_kAdd(best_k_acc, n_attr)
-                            params_noise = nParam_kAdd(best_k_noise, n_attr)
-                            params_stability = nParam_kAdd(best_k_stability, n_attr)
-                            
-                            # Calculate efficiency metrics
-                            acc_eff = row['max_accuracy'] / np.log10(params_acc + 10)
-                            robustness_eff = row['noise_robustness'] / np.log10(params_noise + 10)
-                            stability_eff = (1 - row['stability']) / np.log10(params_stability + 10)
-                            
-                            efficiency_data.append({
-                                'dataset': dataset,
-                                'accuracy_efficiency': acc_eff,
-                                'robustness_efficiency': robustness_eff,
-                                'stability_efficiency': stability_eff
-                            })
-                            break
-            except Exception as e:
-                print(f"Error processing efficiency for {dataset}: {e}")
-        
+        for ds in summary_data:
+            dataset = ds['dataset']
+            results_path = os.path.join(main_dir, dataset, "k_comparison_results.csv")
+            if not os.path.exists(results_path):
+                continue
+            df = pd.read_csv(results_path, index_col=0)
+            n_attr = ds['n_attr']
+
+            # Efficiency metrics at optimal ks
+            for key, k in [('accuracy_eff', ds['best_k_accuracy']),
+                           ('noise_eff',    ds['best_k_noise']),
+                           ('stab_eff',     ds['best_k_stability'])]:
+                params = nParam_kAdd(k, n_attr)
+                if key == 'accuracy_eff':
+                    val = ds['max_accuracy'] / np.log10(params + 10)
+                elif key == 'noise_eff':
+                    val = ds['noise_robustness'] / np.log10(params + 10)
+                else:
+                    val = (1 - ds['stability']) / np.log10(params + 10)
+                efficiency_data.append({
+                    'dataset': dataset,
+                    'metric': key,
+                    'efficiency': val
+                })
         if efficiency_data:
-            # Create efficiency DataFrame
             eff_df = pd.DataFrame(efficiency_data)
-            
-            # Save efficiency summary
-            eff_df.to_csv(os.path.join(main_dir, f"efficiency_summary_{representation}.csv"), index=False)
-            
-            # Create bar chart of efficiency metrics across datasets
-            plt.figure(figsize=(14, 8))
-            datasets = eff_df['dataset'].tolist()
-            x = np.arange(len(datasets))
-            width = 0.25
-            
-            plt.bar(x - width, eff_df['accuracy_efficiency'], width, label='Accuracy Efficiency')
-            plt.bar(x, eff_df['robustness_efficiency'], width, label='Robustness Efficiency')
-            plt.bar(x + width, eff_df['stability_efficiency'], width, label='Stability Efficiency')
-            
-            plt.xlabel('Dataset')
-            plt.ylabel('Efficiency (Performance/log(Parameters))')
-            plt.title(f'Performance-Complexity Tradeoff by Dataset ({representation})')
-            plt.xticks(x, datasets, rotation=45)
+            eff_pivot = eff_df.pivot(index='dataset', columns='metric', values='efficiency')
+            eff_pivot.to_csv(os.path.join(main_dir, f"efficiency_summary_{representation}.csv"))
+            # Plot efficiency
+            plt.figure(figsize=(12, 6))
+            for metric, style in zip(['accuracy_eff','noise_eff','stab_eff'], ['o-','s-','^-']):
+                if metric in eff_pivot:
+                    plt.plot(eff_pivot.index, eff_pivot[metric], style, label=metric)
+            plt.xticks(rotation=45)
+            plt.ylabel('Efficiency')
+            plt.title(f'Efficiency Metrics by Dataset ({representation})')
             plt.legend()
             plt.tight_layout()
             plt.savefig(os.path.join(main_dir, f"efficiency_comparison_{representation}.png"), dpi=300)
             plt.close()
-            
-            # Create efficiency heatmap
-            eff_heatmap = eff_df.set_index('dataset')
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(eff_heatmap, annot=True, cmap='YlGnBu', linewidths=.5, fmt='.4f')
-            plt.title(f'Performance-Complexity Efficiency by Dataset ({representation})')
-            plt.tight_layout()
-            plt.savefig(os.path.join(main_dir, f"efficiency_heatmap_{representation}.png"), dpi=300)
-            plt.close()
-            
             print(f"Efficiency metrics analysis completed for {representation}")
     except Exception as e:
-        print(f"Error creating efficiency comparison: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error during efficiency comparison: {e}")
+
+    return summary_df if summary_data else None
 
 def feature_dropout_analysis(dataset_name, representation="game", output_dir=None, test_size=0.3, random_state=0, max_features_to_drop=None, regularization='l2'):
     """
@@ -653,7 +596,7 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     dataset_name : str
         Name of the dataset to analyze
     representation : str, default="game"
-        Choquet representation to use, either "game" or "mobius"
+        Choquet representation to use, either "game", "mobius", or "shapley"
     output_dir : str, optional
         Directory to save results
     test_size : float, default=0.3
@@ -668,8 +611,8 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     from itertools import combinations
     
     # Validate representation parameter
-    if representation not in ["game", "mobius"]:
-        raise ValueError(f"Invalid representation '{representation}'. Use 'game' or 'mobius'.")
+    if representation not in ["game", "mobius", "shapley"]:
+        raise ValueError(f"Invalid representation '{representation}'. Use 'game', 'mobius', or 'shapley'.")
         
     print(f"\n{'='*80}\nPerforming feature dropout analysis: {dataset_name} with {representation} representation\n{'='*80}")
     
@@ -714,7 +657,14 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     X_test_scaled = scaler.transform(X_test_values)
     
     # Select the appropriate transformation function
-    choquet_transform = choquet_k_additive_game if representation == "game" else choquet_k_additive_mobius
+    if representation == "game":
+        choquet_transform = choquet_k_additive_game
+    elif representation == "mobius":
+        choquet_transform = choquet_k_additive_mobius
+    elif representation == "shapley":
+        choquet_transform = choquet_k_additive_shapley
+    else:
+        raise ValueError(f"Unknown representation: {representation}")
     
     # Dictionary to store results for each k value
     all_results = {}
@@ -921,21 +871,12 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     print(f"Feature dropout analysis completed. Results saved to: {output_dir}")
     return all_results
 
-if __name__ == "__main__":
-    datasets = [        "pairwise_interaction",
-        "exponentially_weighted_interaction",
-        "extreme_coalition",
-        "hierarchical_interaction",
-        "high_dimensional_complex",
-        "higher_order_5_interaction",
-        "higher_order_6_interaction",
-        "mixed_higher_order_interaction",
-        "mixed_interaction",
-        "nested_interaction",
-        "nonlinear_transformation",]
+#if __name__ == "__main__":
+if 1 == 0:
+    datasets = [        "pairwise_interaction",]
     
-    # Choose the representation type - can be "game" or "mobius"
-    representations = ["game", "mobius"]
+    # Choose the representation type - can be "game", "mobius", or "shapley"
+    representations = ["game", "mobius", "shapley"]
     
     # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
     regularizations = [None,'l2']
@@ -976,6 +917,66 @@ if __name__ == "__main__":
                         dataset, 
                         representation=representation,
                         output_dir=feature_dropout_output_dir,
+                        max_features_to_drop=max_features_to_drop,
+                        regularization=regularization
+                    )
+
+if __name__ == "__main__":
+    # 1) Load base dataset
+    base_X, base_y = func_read_data("pairwise_interaction")
+    features = list(range(base_X.shape[1]))
+
+    # 2) Prepare in‑memory datasets (label, X, y)
+    datasets = [
+        ("pairwise_interaction",        base_X,                                                  base_y),
+        ("pairwise_interaction_bias",   add_bias(base_X,   features, bias=0.5),                    base_y),
+        ("pairwise_interaction_scaled", scale_features(base_X, features, factor=2.0),                base_y),
+        ("pairwise_interaction_noisy",  add_gaussian_noise(base_X, features, std=0.1, random_state=42), base_y),
+        ("pairwise_interaction_log",    log_transform(base_X, features),                           base_y),
+        ("pairwise_interaction_power2", power_transform(base_X, features, exponent=2.0),             base_y),
+        ("pairwise_interaction_tanh",   tanh_transform(base_X, features),                          base_y),
+        ("pairwise_interaction_threshold",
+                                         threshold_features(base_X, features,
+                                                            threshold=0.0,
+                                                            above_value=1.0,
+                                                            below_value=0.0),              base_y),
+        ("pairwise_interaction_clipped", clip_features(base_X, features, min_val=0.0, max_val=1.0),    base_y),
+    ]
+
+    # 3) Experiment settings
+    representations     = ["shapley"]
+    regularizations     = ['l2']
+    run_k_additivity    = True
+    run_feature_dropout = False
+    max_features_to_drop = 2
+
+    # 4) Run analyses
+    for representation in representations:
+        for regularization in regularizations:
+            reg_str = "none" if regularization is None else regularization
+            main_dir = f"k_additivity_analysis_{representation}_{reg_str}"
+            os.makedirs(main_dir, exist_ok=True)
+            print(f"\n{'-'*80}\nAnalyzing with {representation} repr and {reg_str} regularization\n{'-'*80}")
+
+            # k‑additivity analysis
+            if run_k_additivity:
+                print("\nRunning k‑additivity analysis...")
+                run_batch_analysis(
+                    datasets_list=datasets,
+                    representation=representation,
+                    regularization=regularization
+                )
+
+            # feature‑dropout analysis
+            if run_feature_dropout:
+                print("\nRunning feature‑dropout analysis...")
+                for label, X, y in datasets:
+                    out_dir = os.path.join(main_dir, label, f"feature_dropout_{representation}_{reg_str}")
+                    os.makedirs(out_dir, exist_ok=True)
+                    feature_dropout_analysis(
+                        (label, X, y),
+                        representation=representation,
+                        output_dir=out_dir,
                         max_features_to_drop=max_features_to_drop,
                         regularization=regularization
                     )

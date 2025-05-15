@@ -1,0 +1,7 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR pairwise_interaction_clipped (game)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 1 (eff: 0.3251, params: 16)
+- Best k for noise robustness efficiency: 1 (eff: 0.3656, params: 16)
+- Best k for stability efficiency: 1 (eff: 0.6838, params: 16)

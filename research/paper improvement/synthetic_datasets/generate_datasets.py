@@ -66,7 +66,7 @@ def analyze_dataset(df, name):
     print(f"Analysis completed for {name}")
     return stats
 
-def enhance_class_separation(y_continuous, margin=0.1):
+def enhance_class_separation(y_continuous, margin=0.0):
     """Create binary target with margin around decision boundary"""
     threshold = np.median(y_continuous)
     
@@ -80,7 +80,7 @@ def enhance_class_separation(y_continuous, margin=0.1):
 
 # 1. Pairwise interactions dataset
 def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15, 
-                                          feature_var=1.5, noise_level=0.3, margin=0.1):
+                                          feature_var=1.5, noise_level=0.0, margin=0.00):
     """Generate dataset with strong pairwise feature interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -109,7 +109,7 @@ def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15,
 
 # 2. Triplet interactions dataset
 def generate_triplet_interaction_dataset(n_samples=1000, n_features=15,
-                                        feature_var=1.5, noise_level=0.3, margin=0.1):
+                                        feature_var=1.5, noise_level=0.3, margin=0.0):
     """Generate dataset with strong triplet feature interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -139,7 +139,7 @@ def generate_triplet_interaction_dataset(n_samples=1000, n_features=15,
 
 # 3. Mixed-order interactions dataset
 def generate_mixed_interaction_dataset(n_samples=1000, n_features=15,
-                                     feature_var=1.5, noise_level=0.3, margin=0.1):
+                                     feature_var=1.5, noise_level=0.3, margin=0.0):
     """Generate dataset with mixed individual, pair, and triplet interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -177,7 +177,7 @@ def generate_mixed_interaction_dataset(n_samples=1000, n_features=15,
 
 # 4. Non-linear transformations dataset
 def generate_nonlinear_transformation_dataset(n_samples=1000, n_features=15,
-                                             feature_var=1.5, noise_level=0.3, margin=0.1):
+                                             feature_var=1.5, noise_level=0.3, margin=0.0):
     """Generate dataset with various non-linear feature transformations"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -217,7 +217,7 @@ def generate_nonlinear_transformation_dataset(n_samples=1000, n_features=15,
 
 # 5. Hierarchical interactions dataset
 def generate_hierarchical_interaction_dataset(n_samples=1000, n_features=15,
-                                             feature_var=1.5, noise_level=0.3, margin=0.1):
+                                             feature_var=1.5, noise_level=0.3, margin=0.0):
     """Generate dataset with nested conditional interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -262,7 +262,7 @@ def generate_hierarchical_interaction_dataset(n_samples=1000, n_features=15,
 
 # 6. Sparse high-dimensional interactions dataset
 def generate_sparse_interaction_dataset(n_samples=1000, n_features=20,
-                                       feature_var=1.5, noise_level=0.3, margin=0.1):
+                                       feature_var=1.5, noise_level=0.3, margin=0.0):
     """Generate dataset with many features but only a few relevant interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -300,7 +300,7 @@ def generate_sparse_interaction_dataset(n_samples=1000, n_features=20,
 
 # 7. Threshold effects dataset
 def generate_threshold_interaction_dataset(n_samples=1000, n_features=15,
-                                          feature_var=1.5, noise_level=0.3, margin=0.1):
+                                          feature_var=1.5, noise_level=0.3, margin=0.0):
     """Generate dataset with interactions that only occur above thresholds"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
@@ -342,31 +342,31 @@ def generate_all_datasets():
     os.makedirs('plots', exist_ok=True)
     
     print("Generating pairwise interaction dataset...")
-    _, _, df1 = generate_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df1 = generate_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df1, "pairwise_interaction")
     
     print("\nGenerating triplet interaction dataset...")
-    _, _, df2 = generate_triplet_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df2 = generate_triplet_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df2, "triplet_interaction")
     
     print("\nGenerating mixed interaction dataset...")
-    _, _, df3 = generate_mixed_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df3 = generate_mixed_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df3, "mixed_interaction")
     
     print("\nGenerating non-linear transformation dataset...")
-    _, _, df4 = generate_nonlinear_transformation_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df4 = generate_nonlinear_transformation_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df4, "nonlinear_transformation")
     
     print("\nGenerating hierarchical interaction dataset...")
-    _, _, df5 = generate_hierarchical_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df5 = generate_hierarchical_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df5, "hierarchical_interaction")
     
     print("\nGenerating sparse interaction dataset...")
-    _, _, df6 = generate_sparse_interaction_dataset(n_features=20, feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df6 = generate_sparse_interaction_dataset(n_features=20, feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df6, "sparse_interaction")
     
     print("\nGenerating threshold interaction dataset...")
-    _, _, df7 = generate_threshold_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.1)
+    _, _, df7 = generate_threshold_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
     analyze_dataset(df7, "threshold_interaction")
     
     print("\nAll datasets generated successfully!")

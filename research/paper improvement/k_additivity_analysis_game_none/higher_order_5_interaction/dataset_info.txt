@@ -1,6 +1,0 @@
-Dataset: higher_order_5_interaction
-Representation: game
-Number of samples: 1001
-Number of attributes: 0
-Train samples: 700
-Test samples: 301

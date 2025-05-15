@@ -1,6 +1,0 @@
-Dataset: nonlinear_transformation
-Representation: game
-Number of samples: 1001
-Number of attributes: 5
-Train samples: 700
-Test samples: 301

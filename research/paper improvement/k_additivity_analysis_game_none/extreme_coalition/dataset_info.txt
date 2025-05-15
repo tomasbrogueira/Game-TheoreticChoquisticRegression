@@ -1,6 +1,0 @@
-Dataset: extreme_coalition
-Representation: game
-Number of samples: 1001
-Number of attributes: 1
-Train samples: 700
-Test samples: 301

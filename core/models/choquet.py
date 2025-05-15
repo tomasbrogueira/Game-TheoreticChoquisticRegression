@@ -164,6 +164,60 @@ def choquet_k_additive_mobius(X_orig, k_add=None):
     return transformed
 
 
+def choquet_k_additive_shapley(X_orig, k_add=None):
+    """
+    k‑additive ‘Shapley‑basis’ transform up to order k_add.
+    
+    For each sample x in X_orig, we build
+      v_x(∅)=0,  v_x(S)=min(x[j] for j in S) for S≠∅
+    and then for every coalition A with 1 ≤ |A| ≤ k_add compute
+      g_A(x) = ∑_{C⊆A} [ (-1)^{|A|-|C|} / (|A|-|C|+1) ] · v_x(C).
+    
+    The output array has columns ordered first by |A|=1 (singletons),
+    then all |A|=2 pairs, … up to |A|=k_add, in lex order within each size.
+    """
+    X = np.asarray(X_orig, dtype=float)
+    n_samp, n = X.shape
+
+    # default to full n‑way if not specified
+    if k_add is None:
+        k_add = n
+    elif k_add > n:
+        raise ValueError("k_add cannot exceed number of features")
+
+    # 1) build list of all “v‑coalitions” up to size k_add, including ∅
+    v_coalitions = [()]  # index 0 is the empty set
+    for r in range(1, k_add+1):
+        v_coalitions += list(combinations(range(n), r))
+    idx_of = {coal: i for i, coal in enumerate(v_coalitions)}
+
+    # 2) compute v_x(C) for every sample x and every coalition C
+    m = len(v_coalitions)
+    V = np.zeros((n_samp, m))
+    for i, C in enumerate(v_coalitions[1:], start=1):
+        if len(C) == 1:
+            V[:, i] = X[:, C[0]]
+        else:
+            V[:, i] = X[:, C].min(axis=1)
+
+    # 3) build the list of output coalitions (those of size 1..k_add)
+    out_coals = []
+    for r in range(1, k_add+1):
+        out_coals += list(combinations(range(n), r))
+
+    # 4) allocate output using the formula
+    T = np.zeros((n_samp, len(out_coals)))
+    for j, A in enumerate(out_coals):
+        s = len(A)
+        # sum over all C ⊆ A
+        for r in range(s+1):
+            coeff = (-1)**(s-r) / (s-r + 1)
+            for C in combinations(A, r):
+                T[:, j] += coeff * V[:, idx_of[C]]
+
+    return T
+
+
 def choquet_matrix_2add(X_orig):
     """
     Compute the 2-additive Choquet integral transformation using Shapley representation.
