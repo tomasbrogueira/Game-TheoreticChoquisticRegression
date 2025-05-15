@@ -33,8 +33,6 @@ def powerset(iterable,k_add):
 # Choquet Transformation Functions
 # =============================================================================
 
-
-
 def choquet_matrix_mobius(X_orig,kadd):
     
     nSamp, nAttr = X_orig.shape # Number of samples (train) and attributes
