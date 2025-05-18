@@ -1,7 +1,14 @@
 import os
 os.environ["SCIPY_ARRAY_API"] = "1"
 
+RANDOM_STATE = 42
+
 import numpy as np
+import random
+
+np.random.seed(RANDOM_STATE)
+random.seed(RANDOM_STATE)
+
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
@@ -14,6 +21,8 @@ from tqdm import tqdm
 import warnings
 from itertools import combinations
 warnings.filterwarnings("ignore")
+
+
 
 from regression_classes import ( nParam_kAdd,
                                 powerset,
@@ -945,7 +954,7 @@ if __name__ == "__main__":
 
     # 3) Experiment settings
     representations     = ["shapley"]
-    regularizations     = ['l2']
+    regularizations     = [None]
     run_k_additivity    = True
     run_feature_dropout = False
     max_features_to_drop = 2
