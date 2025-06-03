@@ -70,11 +70,21 @@ def enhance_class_separation(y_continuous, margin=0.0):
     """Create binary target with margin around decision boundary"""
     threshold = np.median(y_continuous)
     
+    # Print diagnostic information to understand threshold effect
+    print(f"Median threshold: {threshold:.4f}")
+    print(f"Target min: {y_continuous.min():.4f}, max: {y_continuous.max():.4f}")
+    print(f"Target std dev: {np.std(y_continuous):.4f}")
+    
     y_binary = np.zeros(len(y_continuous))
     y_binary[y_continuous > threshold] = 1
     
     # Create mask to exclude samples near the boundary
     keep_mask = np.abs(y_continuous - threshold) > margin * np.std(y_continuous)
+    
+    # Print class balance information
+    class_balance = np.mean(y_binary)
+    print(f"Binary class balance: {class_balance:.2f} / {1-class_balance:.2f}")
+    print(f"Samples kept: {np.sum(keep_mask)} out of {len(keep_mask)} ({np.mean(keep_mask)*100:.1f}%)")
     
     return y_binary.astype(int), keep_mask
 
@@ -86,8 +96,20 @@ def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15,
     y = np.zeros(n_samples)
     
     # Create pairwise interactions with strong coefficients
+    pair_contributions = []
     for i in range(0, n_features-1, 2):
-        y += 2.5 * (X[:, i] * X[:, i+1])
+        interaction = X[:, i] * X[:, i+1]
+        # Use absolute values to prevent cancellation effects
+        contribution = 2.5 * np.abs(interaction)
+        y += contribution
+        
+        # Track the mean contribution of each pair for diagnostics
+        pair_contributions.append((i, i+1, np.mean(contribution)))
+    
+    # Print contribution of each pair to verify equal impact
+    print("Pair contributions to target variable:")
+    for i, j, contrib in pair_contributions:
+        print(f"Pair X{i+1}-X{j+1}: {contrib:.4f}")
     
     y += np.random.normal(0, noise_level, size=n_samples)
     
@@ -101,7 +123,8 @@ def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15,
     
     description = (
         f"Pairwise interaction dataset with {n_features} features and {n_samples} samples. "
-        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}. "
+        f"Using absolute interaction values to prevent cancellation."
     )
     
     df = save_dataset(X, y_binary, "pairwise_interaction_dataset.csv", description)

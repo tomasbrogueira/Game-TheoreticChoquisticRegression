@@ -953,8 +953,8 @@ if __name__ == "__main__":
     ]
 
     # 3) Experiment settings
-    representations     = ["shapley"]
-    regularizations     = [None]
+    representations     = ["shapley", "mobius", "game"]
+    regularizations     = [None,'l1','l2']
     run_k_additivity    = True
     run_feature_dropout = False
     max_features_to_drop = 2
