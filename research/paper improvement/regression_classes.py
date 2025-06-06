@@ -94,200 +94,193 @@ def choquet_matrix(X_orig, all_coalitions=None):
 
 def choquet_k_additive_mobius(X_orig, k_add=None):
     """
-    Compute the truncated Möbius transform m_x(A) of the set function
-    mu_x(B) = min_{j \in B} x_j, for all B != ∅, and 0 for B=∅.
+    Build a design matrix for a k-additive Choquet model in the Möbius basis.
+    Each column j corresponds to a subset A with |A| <= k_add,
+    and for sample i, design[i, j] = min_{h in A}( X_orig[i,h] ).
 
-    Then only keep sets A with |A| <= k_add.
+    If you then train a linear/logistic model on this design,
+    the learned coefficients correspond to the Möbius coefficients m(A).
+
+    Parameters
+    ----------
+    X_orig : ndarray, shape (n_samples, n_features)
+        Input data
+    k_add : int or None
+        If None, we treat k_add = n_features (fully additive).
+
+    Returns
+    -------
+    M : ndarray, shape (n_samples, p)
+        The aggregator-based design matrix.
     """
     import numpy as np
     from itertools import combinations
-    
+
     X_orig = np.asarray(X_orig)
     nSamp, nAttr = X_orig.shape
 
-    if k_add is None:
+    if k_add is None or k_add > nAttr:
         k_add = nAttr
-    elif k_add > nAttr:
-        raise ValueError("k_add cannot be greater than the number of attributes.")
 
-    # build all subsets up to size k_add
+    # 1) build the subsets up to size k_add (skip empty)
     all_coalitions = []
-    for r in range(1, k_add+1):
-        all_coalitions.extend(list(combinations(range(nAttr), r)))
+    for sub in powerset(range(nAttr), k_add):
+        if len(sub) > 0:  # skip empty
+            all_coalitions.append(sub)
 
-    # map each coalition -> index
-    coal_idx = {coal: i for i, coal in enumerate(all_coalitions)}
+    # optional: sort them by (len(A), A) for stability
+    all_coalitions.sort(key=lambda c: (len(c), c))
 
-    # We'll store results in (nSamp, len(all_coalitions)) for the Möbius coefficients
+    # 2) allocate design matrix
     M = np.zeros((nSamp, len(all_coalitions)), dtype=float)
 
-    # We'll also need mu_x(B) for all B with |B| <= k_add
-    # plus the empty set for convenience
-    smaller_coals = [()]  # empty set
-    for r in range(1, k_add+1):
-        smaller_coals.extend(list(combinations(range(nAttr), r)))
-
-    # pre-compute mu_x(B) = min(x[B]), B != ∅; mu_x(∅)=0
-    mu_vals = np.zeros((nSamp, len(smaller_coals)), dtype=float)
-    idx_of_B = {}
-    for iB, B in enumerate(smaller_coals):
-        idx_of_B[B] = iB
-        if len(B) == 0:
-            mu_vals[:, iB] = 0.0
-        elif len(B) == 1:
-            mu_vals[:, iB] = X_orig[:, B[0]]
+    # 3) fill with min(...) aggregator
+    for col_idx, subsetA in enumerate(all_coalitions):
+        if len(subsetA) == 1:
+            M[:, col_idx] = X_orig[:, subsetA[0]]
         else:
-            mu_vals[:, iB] = X_orig[:, B].min(axis=1)
-
-    # Now compute m_x(A) = sum_{B subseteq A} (-1)^{|A|-|B|} mu_x(B)
-    for iA, A in enumerate(all_coalitions):
-        sA = len(A)
-        # sum over B \subseteq A
-        for r in range(sA+1):
-            sign = (-1)**(sA - r)
-            for B in combinations(A, r):
-                M[:, iA] += sign * mu_vals[:, idx_of_B[B]]
+            M[:, col_idx] = X_orig[:, subsetA].min(axis=1)
 
     return M
+
 
 
 def choquet_k_additive_shapley(X_orig, k_add=None):
     """
     k‑additive ‘Shapley‑basis’ transform up to order k_add.
-    
-    For each sample x in X_orig, we build
-      v_x(∅)=0,  v_x(S)=min(x[j] for j in S) for S≠∅
-    and then for every coalition A with 1 ≤ |A| ≤ k_add compute
-      g_A(x) = ∑_{C⊆A} [ (-1)^{|A|-|C|} / (|A|-|C|+1) ] · v_x(C).
-    
-    The output array has columns ordered first by |A|=1 (singletons),
-    then all |A|=2 pairs, … up to |A|=k_add, in lex order within each size.
-    """
-    X = np.asarray(X_orig, dtype=float)
-    n_samp, n = X.shape
 
-    # default to full n‑way if not specified
-    if k_add is None:
-        k_add = n
-    elif k_add > n:
-        raise ValueError("k_add cannot exceed number of features")
+    Builds a design matrix T where each column corresponds to
+      g_A(x) = sum_{C ⊆ A} [(-1)^{|A|-|C|}/(|A|-|C|+1)] * min_{j in C}(x_j),
+    for subsets A with 1 <= |A| <= k_add.
 
-    # 1) build list of all “v‑coalitions” up to size k_add, including ∅
-    v_coalitions = [()]  # index 0 is the empty set
-    for r in range(1, k_add+1):
-        v_coalitions += list(combinations(range(n), r))
-    idx_of = {coal: i for i, coal in enumerate(v_coalitions)}
-
-    # 2) compute v_x(C) for every sample x and every coalition C
-    m = len(v_coalitions)
-    V = np.zeros((n_samp, m))
-    for i, C in enumerate(v_coalitions[1:], start=1):
-        if len(C) == 1:
-            V[:, i] = X[:, C[0]]
-        else:
-            V[:, i] = X[:, C].min(axis=1)
-
-    # 3) build the list of output coalitions (those of size 1..k_add)
-    out_coals = []
-    for r in range(1, k_add+1):
-        out_coals += list(combinations(range(n), r))
-
-    # 4) allocate output using the formula
-    T = np.zeros((n_samp, len(out_coals)))
-    for j, A in enumerate(out_coals):
-        s = len(A)
-        # sum over all C ⊆ A
-        for r in range(s+1):
-            coeff = (-1)**(s-r) / (s-r + 1)
-            for C in combinations(A, r):
-                T[:, j] += coeff * V[:, idx_of[C]]
-
-    return T
-
-def choquet_k_additive_game(X_orig, k_add=None, full=True):
-    """
-    Game-basis Choquet transform, full or properly k-additive.
+    Logistic regression coefficients => I(A), the Shapley interaction indices.
 
     Parameters
     ----------
     X_orig : array-like, shape (n_samples, n_features)
-        Input data.
     k_add : int or None
-        If None: use the full capacity v_x(S)=min(x[S]) on suffix-sets.
-        If integer k: enforce true k-additivity by truncating Möbius terms m(A)
-        for |A|>k, then recomputing the capacity on each suffix-set.
-    full : bool, default=False
-        If False: return the n-dimensional suffix-difference vector.
-        If True: return the 2^n−1 vector that places each suffix diff
-        into its matching subset-column (zeros elsewhere).
+
+    Returns
+    -------
+    T : ndarray of shape (n_samples, p)
+        aggregator-based design matrix
+    """
+    import numpy as np
+    from itertools import combinations
+
+    X_orig = np.asarray(X_orig, dtype=float)
+    n_samp, n = X_orig.shape
+
+    if k_add is None or k_add > n:
+        k_add = n
+
+    # 1) build subsets (skip empty)
+    shap_coals = []
+    for sub in powerset(range(n), k_add):
+        if len(sub) > 0:
+            shap_coals.append(sub)
+    shap_coals.sort(key=lambda c: (len(c), c))
+
+    # 2) allocate
+    T = np.zeros((n_samp, len(shap_coals)), dtype=float)
+
+    # 3) fill each column j => subset A_j
+    for col_idx, A in enumerate(shap_coals):
+        sA = len(A)
+        # sum_{r=0..sA} factor * min_{...}
+        for r in range(sA+1):
+            factor = (-1)**(sA - r) / float(sA - r + 1)
+            for C in combinations(A, r):
+                if len(C) == 0:
+                    # empty => min(...)=0
+                    continue
+                elif len(C) == 1:
+                    T[:, col_idx] += factor * X_orig[:, C[0]]
+                else:
+                    T[:, col_idx] += factor * X_orig[:, C].min(axis=1)
+
+    return T
+
+
+def choquet_k_additive_game(X_orig, k_add=None, full=True):
+    """
+    Build a design matrix for a k-additive Choquet model in the 'game/capacity' basis
+    using ascending-sort differences.
+
+    If full=False:
+      Return an (n_samples, n_features) array of the suffix diffs for each x.
+    
+    If full=True:
+      Build columns for each subset S, |S| <= k_add.
+      For each sample x, we place [ x_(j)-x_(j-1) ] in the column for S_j
+      if S_j is exactly the suffix set of sorted indices j..(m-1),
+      skipping subsets bigger than k_add.
+
+    Parameters
+    ----------
+    X_orig : ndarray, shape (n_samples, n_features)
+    k_add : int or None
+        If None => up to n_features
+    full : bool, default=True
 
     Returns
     -------
     T : ndarray
-        - If full=False: shape (n_samples, n_features)
-        - If full=True:  shape (n_samples, 2^n − 1)
+      - If full=False => shape (n_samples, n_features)
+      - If full=True  => shape (n_samples, p) where p= # of subsets of size <= k_add
     """
-    X = np.asarray(X_orig, dtype=float)
-    n_samp, n = X.shape
+    import numpy as np
 
-    # 1) sort and compute differences x_(j) - x_(j-1)
-    order = np.argsort(X, axis=1)
-    X_srt = np.take_along_axis(X, order, axis=1)
+    X_orig = np.asarray(X_orig, dtype=float)
+    n_samp, n = X_orig.shape
+
+    if k_add is None or k_add > n:
+        k_add = n
+
+    # 1) sort each row ascending
+    order = np.argsort(X_orig, axis=1)
+    X_srt = np.take_along_axis(X_orig, order, axis=1)
+
+    # 2) diffs
     X_ext = np.concatenate((np.zeros((n_samp,1)), X_srt), axis=1)
-    diffs = X_ext[:,1:] - X_ext[:,:-1]   # (n_samp, n)
-
-    # 2) if k_add specified, build & truncate Möbius coefficients
-    if k_add is not None:
-        # list all subsets A of {0..n-1}
-        full_coals = [()]
-        for r in range(1, n+1):
-            full_coals += list(combinations(range(n), r))
-        idx_full = {coal: idx for idx, coal in enumerate(full_coals)}
-
-        # compute full Möbius m_full(A)=v_x(A) for all nonempty A
-        M_full = np.zeros((n_samp, len(full_coals)-1))
-        for j, A in enumerate(full_coals[1:], start=0):
-            if len(A) == 1:
-                M_full[:, j] = X[:, A[0]]
-            else:
-                M_full[:, j] = X[:, A].min(axis=1)
-
-        # truncate high-order terms
-        m_trunc = np.zeros_like(M_full)
-        for A, idx in idx_full.items():
-            if A and len(A) <= k_add:
-                m_trunc[:, idx-1] = M_full[:, idx-1]
-
-    # 3) compute the n suffix-difference features
-    G = np.zeros((n_samp, n))
-    for i in range(n_samp):
-        for j in range(n):
-            S_j = tuple(sorted(order[i, j:]))
-            if k_add is None:
-                # capacity v_x(S_j) = min over x[S_j]
-                mu = X[i, list(S_j)].min() if S_j else 0.0
-            else:
-                # truncated capacity: mu_k(S_j)=sum_{A⊆S_j} m_trunc(A)
-                mu = 0.0
-                for r in range(1, len(S_j)+1):
-                    for A in combinations(S_j, r):
-                        mu += m_trunc[i, idx_full[A]-1]
-            G[i, j] = diffs[i, j] * mu
+    diffs = X_ext[:,1:] - X_ext[:,:-1]  # shape (n_samp, n)
 
     if not full:
-        return G
+        # just return the n suffix-differences
+        return diffs
 
-    # 4) build the full 2^n-1 vector placing each G[:,j] into the column for suffix S_j
+    # 3) if full=True => build columns for subsets up to size k_add
+    from itertools import chain, combinations
+    
+    # gather subsets (skip empty, skip >k_add)
+    # (Using your powerset)
     all_coals = []
-    for r in range(1, n+1):
-        all_coals += list(combinations(range(n), r))
-    T_full = np.zeros((n_samp, len(all_coals)))
+    for sub in powerset(range(n), k_add):
+        if len(sub) > 0:
+            all_coals.append(sub)
+    all_coals.sort(key=lambda c: (len(c), c))
+    
+    # map subset => col index
+    sub_index = {coal: idx for idx, coal in enumerate(all_coals)}
+    p = len(all_coals)
+
+    # 4) allocate
+    T = np.zeros((n_samp, p), dtype=float)
+
+    # fill the T
     for i in range(n_samp):
         for j in range(n):
-            S_j = tuple(sorted(order[i, j:]))
-            col = all_coals.index(S_j)
-            T_full[i, col] = G[i, j]
-    return T_full
+            # suffix set of sorted indices => order[i, j..(n-1)]
+            S_j = tuple(sorted(order[i, j:].tolist()))
+            if len(S_j) <= k_add:
+                # see if it's in all_coals
+                col = sub_index.get(S_j, None)
+                if col is not None:
+                    T[i, col] += diffs[i, j]
+
+    return T
+
+
 
 def choquet_matrix_2add(X_orig):
     """
