@@ -93,6 +93,15 @@ def choquet_matrix(X_orig, all_coalitions=None):
     return data_opt, all_coalitions
 
 def choquet_k_additive_mobius(X_orig, k_add=None):
+    """
+    Compute the truncated Möbius transform m_x(A) of the set function
+    mu_x(B) = min_{j \in B} x_j, for all B != ∅, and 0 for B=∅.
+
+    Then only keep sets A with |A| <= k_add.
+    """
+    import numpy as np
+    from itertools import combinations
+    
     X_orig = np.asarray(X_orig)
     nSamp, nAttr = X_orig.shape
 
@@ -101,32 +110,46 @@ def choquet_k_additive_mobius(X_orig, k_add=None):
     elif k_add > nAttr:
         raise ValueError("k_add cannot be greater than the number of attributes.")
 
-    # Generate all valid coalitions up to size k_add
+    # build all subsets up to size k_add
     all_coalitions = []
-    for r in range(1, min(k_add, nAttr)+1):
+    for r in range(1, k_add+1):
         all_coalitions.extend(list(combinations(range(nAttr), r)))
 
-    # Calculate number of features in the transformed space
-    n_transformed = len(all_coalitions)
+    # map each coalition -> index
+    coal_idx = {coal: i for i, coal in enumerate(all_coalitions)}
 
-    # Initialize output matrix (no longer restricted to non-negative values)
-    transformed = np.zeros((nSamp, n_transformed))
+    # We'll store results in (nSamp, len(all_coalitions)) for the Möbius coefficients
+    M = np.zeros((nSamp, len(all_coalitions)), dtype=float)
 
-    # Process each sample directly without sorting
-    for i in range(nSamp):
-        x = X_orig[i]
+    # We'll also need mu_x(B) for all B with |B| <= k_add
+    # plus the empty set for convenience
+    smaller_coals = [()]  # empty set
+    for r in range(1, k_add+1):
+        smaller_coals.extend(list(combinations(range(nAttr), r)))
 
-        # For each coalition, compute its value directly
-        for idx, coalition in enumerate(all_coalitions):
-            # For singleton coalition, use the feature value directly
-            if len(coalition) == 1:
-                transformed[i, idx] = x[coalition[0]]
-            # For larger coalitions, use the minimum value across the coalition
-            else:
-                coalition_values = [x[j] for j in coalition]
-                transformed[i, idx] = min(coalition_values)
+    # pre-compute mu_x(B) = min(x[B]), B != ∅; mu_x(∅)=0
+    mu_vals = np.zeros((nSamp, len(smaller_coals)), dtype=float)
+    idx_of_B = {}
+    for iB, B in enumerate(smaller_coals):
+        idx_of_B[B] = iB
+        if len(B) == 0:
+            mu_vals[:, iB] = 0.0
+        elif len(B) == 1:
+            mu_vals[:, iB] = X_orig[:, B[0]]
+        else:
+            mu_vals[:, iB] = X_orig[:, B].min(axis=1)
 
-    return transformed
+    # Now compute m_x(A) = sum_{B subseteq A} (-1)^{|A|-|B|} mu_x(B)
+    for iA, A in enumerate(all_coalitions):
+        sA = len(A)
+        # sum over B \subseteq A
+        for r in range(sA+1):
+            sign = (-1)**(sA - r)
+            for B in combinations(A, r):
+                M[:, iA] += sign * mu_vals[:, idx_of_B[B]]
+
+    return M
+
 
 def choquet_k_additive_shapley(X_orig, k_add=None):
     """
