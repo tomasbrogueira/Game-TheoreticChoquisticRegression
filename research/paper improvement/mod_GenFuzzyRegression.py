@@ -13,6 +13,13 @@ def func_read_data(data_imp):
     # Synthetic datasets paths
     synthetic_paths = {
         "pairwise_interaction": "pairwise_interaction_dataset.csv",
+        "pairwise_interaction_raw": "pairwise_interaction_dataset_raw.csv",
+        "pairwise_interaction_normalized": "pairwise_interaction_dataset_normalized.csv",
+        "pure_pairwise_interaction": "pure_pairwise_interaction_dataset.csv",
+        "triplet_interaction": "triplet_interaction_dataset.csv",
+        "triplet_interaction_raw": "triplet_interaction_dataset.csv",
+        "triplet_interaction_normalized": "triplet_interaction_dataset_normalized.csv",
+        
         "exponentially_weighted_interaction": "exponentially_weighted_interaction_dataset.csv",
         "extreme_coalition": "extreme_coalition_dataset.csv",
         "hierarchical_interaction": "hierarchical_interaction_dataset.csv",

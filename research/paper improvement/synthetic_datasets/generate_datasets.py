@@ -90,21 +90,37 @@ def enhance_class_separation(y_continuous, margin=0.0):
 
 # 1. Pairwise interactions dataset
 def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15, 
-                                          feature_var=1.5, noise_level=0.0, margin=0.00):
+                                          feature_var=1.5, noise_level=0.0, margin=0.00,
+                                          normalize_interactions=False):
     """Generate dataset with strong pairwise feature interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
     # Create pairwise interactions with strong coefficients
     pair_contributions = []
+    raw_interactions = []
+    
+    # First pass: calculate all interactions and their stats
     for i in range(0, n_features-1, 2):
         interaction = X[:, i] * X[:, i+1]
         # Use absolute values to prevent cancellation effects
-        contribution = 2.5 * np.abs(interaction)
+        abs_interaction = np.abs(interaction)
+        raw_interactions.append((i, i+1, abs_interaction))
+    
+    # Second pass: add normalized or raw contributions to target
+    for i, (feat_i, feat_j, abs_interaction) in enumerate(raw_interactions):
+        if normalize_interactions:
+            # Normalize to make mean contribution equal for all pairs
+            normalized_interaction = abs_interaction / np.mean(abs_interaction) * feature_var
+            contribution = 2.5 * normalized_interaction
+        else:
+            # Original approach - contributions will vary
+            contribution = 2.5 * abs_interaction
+            
         y += contribution
         
         # Track the mean contribution of each pair for diagnostics
-        pair_contributions.append((i, i+1, np.mean(contribution)))
+        pair_contributions.append((feat_i, feat_j, np.mean(contribution)))
     
     # Print contribution of each pair to verify equal impact
     print("Pair contributions to target variable:")
@@ -124,23 +140,49 @@ def generate_pairwise_interaction_dataset(n_samples=1000, n_features=15,
     description = (
         f"Pairwise interaction dataset with {n_features} features and {n_samples} samples. "
         f"Feature variance={feature_var}, noise={noise_level}, margin={margin}. "
-        f"Using absolute interaction values to prevent cancellation."
+        f"Using {'normalized' if normalize_interactions else 'raw'} absolute interaction values."
     )
     
-    df = save_dataset(X, y_binary, "pairwise_interaction_dataset.csv", description)
+    df = save_dataset(X, y_binary, f"pairwise_interaction_dataset_{'normalized' if normalize_interactions else 'raw'}.csv", description)
     return X, y_binary, df
 
 # 2. Triplet interactions dataset
 def generate_triplet_interaction_dataset(n_samples=1000, n_features=15,
-                                        feature_var=1.5, noise_level=0.3, margin=0.0):
+                                        feature_var=1.5, noise_level=0.3, margin=0.0,
+                                        normalize_interactions=False):
     """Generate dataset with strong triplet feature interactions"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
     # Create triplet interactions with strong coefficients
+    triplet_contributions = []
+    raw_interactions = []
+    
+    # First pass: calculate all interactions and their stats
     for i in range(0, n_features-2, 3):
         if i+2 < n_features:
-            y += 3.5 * (X[:, i] * X[:, i+1] * X[:, i+2])
+            interaction = X[:, i] * X[:, i+1] * X[:, i+2]
+            raw_interactions.append((i, i+1, i+2, interaction))
+    
+    # Second pass: add normalized or raw contributions to target
+    for i, (feat_i, feat_j, feat_k, interaction) in enumerate(raw_interactions):
+        if normalize_interactions:
+            # Normalize to make mean contribution equal for all triplets
+            normalized_interaction = interaction / np.mean(interaction) * feature_var
+            contribution = 3.5 * normalized_interaction
+        else:
+            # Original approach - contributions will vary
+            contribution = 3.5 * interaction
+            
+        y += contribution
+        
+        # Track the mean contribution of each triplet for diagnostics
+        triplet_contributions.append((feat_i, feat_j, feat_k, np.mean(contribution)))
+    
+    # Print contribution of each triplet to verify equal impact
+    print("Triplet contributions to target variable:")
+    for i, j, k, contrib in triplet_contributions:
+        print(f"Triplet X{i+1}-X{j+1}-X{k+1}: {contrib:.4f}")
     
     y += np.random.normal(0, noise_level, size=n_samples)
     
@@ -154,10 +196,11 @@ def generate_triplet_interaction_dataset(n_samples=1000, n_features=15,
     
     description = (
         f"Triplet interaction dataset with {n_features} features and {n_samples} samples. "
-        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}. "
+        f"Using {'normalized' if normalize_interactions else 'raw'} interaction values."
     )
     
-    df = save_dataset(X, y_binary, "triplet_interaction_dataset.csv", description)
+    df = save_dataset(X, y_binary, f"triplet_interaction_dataset{'_normalized' if normalize_interactions else ''}.csv", description)
     return X, y_binary, df
 
 # 3. Mixed-order interactions dataset
@@ -360,17 +403,59 @@ def generate_threshold_interaction_dataset(n_samples=1000, n_features=15,
     df = save_dataset(X, y_binary, "threshold_interaction_dataset.csv", description)
     return X, y_binary, df
 
+def generate_pure_pairwise_interaction_dataset(n_samples=1000, n_features=15, 
+                                              feature_var=1.5, noise_level=0.3, margin=0.0):
+    """Generate dataset with pure pairwise feature interactions without using absolute values"""
+    X = np.random.normal(0, feature_var, size=(n_samples, n_features))
+    y = np.zeros(n_samples)
+    
+    # Create pairwise interactions with pure multiplication (no absolute value)
+    for i in range(0, n_features-1, 2):
+        if i+1 < n_features:
+            # Pure multiplication without absolute value
+            y += 2.5 * (X[:, i] * X[:, i+1])
+    
+    y += np.random.normal(0, noise_level, size=n_samples)
+    
+    # Apply class separation with margin
+    y_binary, keep_mask = enhance_class_separation(y, margin)
+    
+    if margin > 0:
+        X = X[keep_mask]
+        y_binary = y_binary[keep_mask]
+        n_samples = len(y_binary)
+    
+    description = (
+        f"Pure pairwise interaction dataset with {n_features} features and {n_samples} samples. "
+        f"Feature variance={feature_var}, noise={noise_level}, margin={margin}."
+    )
+    
+    df = save_dataset(X, y_binary, "pure_pairwise_interaction_dataset.csv", description)
+    return X, y_binary, df
+
 def generate_all_datasets():
     """Generate all synthetic datasets"""
     os.makedirs('plots', exist_ok=True)
     
-    print("Generating pairwise interaction dataset...")
-    _, _, df1 = generate_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
-    analyze_dataset(df1, "pairwise_interaction")
+    print("Generating pairwise interaction dataset (raw)...")
+    _, _, df1 = generate_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0, normalize_interactions=False)
+    analyze_dataset(df1, "pairwise_interaction_raw")
     
-    print("\nGenerating triplet interaction dataset...")
-    _, _, df2 = generate_triplet_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
-    analyze_dataset(df2, "triplet_interaction")
+    print("\nGenerating pairwise interaction dataset (normalized)...")
+    _, _, df1_norm = generate_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0, normalize_interactions=True)
+    analyze_dataset(df1_norm, "pairwise_interaction_normalized")
+    
+    print("\nGenerating pure pairwise interaction dataset (no absolute value)...")
+    _, _, df1_pure = generate_pure_pairwise_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)
+    analyze_dataset(df1_pure, "pure_pairwise_interaction")
+    
+    print("\nGenerating triplet interaction dataset (raw)...")
+    _, _, df2 = generate_triplet_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0, normalize_interactions=False)
+    analyze_dataset(df2, "triplet_interaction_raw")
+    
+    print("\nGenerating triplet interaction dataset (normalized)...")
+    _, _, df2_norm = generate_triplet_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0, normalize_interactions=True)
+    analyze_dataset(df2_norm, "triplet_interaction_normalized")
     
     print("\nGenerating mixed interaction dataset...")
     _, _, df3 = generate_mixed_interaction_dataset(feature_var=1.5, noise_level=0.3, margin=0.0)

@@ -1,0 +1,2 @@
+k_value,feature_combination,features_kept,features_dropped,kept_indices,accuracy,n_params
+7,"[0, 1, 2, 3, 4, 5, 6]",7,0,"0,1,2,3,4,5,6",0.9258409785932722,128

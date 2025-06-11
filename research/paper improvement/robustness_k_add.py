@@ -52,7 +52,8 @@ def direct_k_additivity_analysis(
     output_dir=None,
     test_size=0.3,
     random_state=42,
-    regularization='l2'
+    regularization='l2',
+    bootstrap_stability=True
 ):    
     """
     Complete analysis of k-additivity impact using a direct implementation without 
@@ -72,6 +73,8 @@ def direct_k_additivity_analysis(
         Random seed for reproducibility
     regularization : str, default='l2'
         Regularization type for logistic regression ('l1', 'l2', 'elasticnet', or 'none')
+    bootstrap_stability : bool, default=True
+        Whether to perform bootstrap stability analysis
     """
     # determine name, X, y
     if isinstance(dataset, (list, tuple)) and len(dataset) == 3:
@@ -121,16 +124,20 @@ def direct_k_additivity_analysis(
         f.write(f"Test samples: {len(X_test)}\n")
     
     # Results dataframe for all k values
+    columns = [
+        'k_value', 
+        'n_params', 
+        'train_time', 
+        'baseline_accuracy',
+        'noise_0.05', 'noise_0.1', 'noise_0.2', 'noise_0.3'
+    ]
+    
+    if bootstrap_stability:
+        columns.extend(['bootstrap_mean', 'bootstrap_std'])
+    
     results_df = pd.DataFrame(
         index=range(1, nAttr + 1),
-        columns=[
-            'k_value', 
-            'n_params', 
-            'train_time', 
-            'baseline_accuracy',
-            'noise_0.05', 'noise_0.1', 'noise_0.2', 'noise_0.3',
-            'bootstrap_mean', 'bootstrap_std'
-        ]
+        columns=columns
     )
     
     # Scale the data
@@ -208,28 +215,29 @@ def direct_k_additivity_analysis(
                 print(f"  Noise level {noise_level}: accuracy = {avg_noise_acc:.4f}")
             
             # Bootstrap stability testing
-            print("- Testing bootstrap stability...")
-            bootstrap_accuracies = []
-            n_bootstrap = 50  # Number of bootstrap samples
-            
-            for _ in range(n_bootstrap):
-                # Create bootstrap sample
-                indices = np.random.choice(len(X_test_scaled), size=int(0.8*len(X_test_scaled)), replace=True)
-                X_boot = X_test_scaled[indices]
-                y_boot = y_test_values[indices]
+            if bootstrap_stability:
+                print("- Testing bootstrap stability...")
+                bootstrap_accuracies = []
+                n_bootstrap = 50  # Number of bootstrap samples
                 
-                # Transform bootstrap data and evaluate
-                X_boot_choquet = choquet_transform(X_boot, k_add=k)
-                y_pred_boot = model.predict(X_boot_choquet)
-                boot_acc = accuracy_score(y_boot, y_pred_boot)
-                bootstrap_accuracies.append(boot_acc)
-            
-            # Record bootstrap results
-            bootstrap_mean = np.mean(bootstrap_accuracies)
-            bootstrap_std = np.std(bootstrap_accuracies)
-            results_df.loc[k, 'bootstrap_mean'] = bootstrap_mean
-            results_df.loc[k, 'bootstrap_std'] = bootstrap_std
-            print(f"  Bootstrap: mean = {bootstrap_mean:.4f}, std = {bootstrap_std:.4f}")
+                for _ in range(n_bootstrap):
+                    # Create bootstrap sample
+                    indices = np.random.choice(len(X_test_scaled), size=int(0.8*len(X_test_scaled)), replace=True)
+                    X_boot = X_test_scaled[indices]
+                    y_boot = y_test_values[indices]
+                    
+                    # Transform bootstrap data and evaluate
+                    X_boot_choquet = choquet_transform(X_boot, k_add=k)
+                    y_pred_boot = model.predict(X_boot_choquet)
+                    boot_acc = accuracy_score(y_boot, y_pred_boot)
+                    bootstrap_accuracies.append(boot_acc)
+                
+                # Record bootstrap results
+                bootstrap_mean = np.mean(bootstrap_accuracies)
+                bootstrap_std = np.std(bootstrap_accuracies)
+                results_df.loc[k, 'bootstrap_mean'] = bootstrap_mean
+                results_df.loc[k, 'bootstrap_std'] = bootstrap_std
+                print(f"  Bootstrap: mean = {bootstrap_mean:.4f}, std = {bootstrap_std:.4f}")
             
         except Exception as e:
             print(f"Error processing k={k}: {str(e)}")
@@ -286,15 +294,16 @@ def direct_k_additivity_analysis(
     plt.close()
     
     # 4. Bootstrap stability
-    plt.figure(figsize=(10, 6))
-    plt.errorbar(results_df['k_value'], results_df['bootstrap_mean'], 
-                 yerr=results_df['bootstrap_std'], fmt='o-', capsize=5)
-    plt.title(f'Bootstrap Stability vs k-additivity ({dataset_name}, {representation})')
-    plt.xlabel('k-additivity')
-    plt.ylabel('Bootstrap Accuracy (mean ± std)')
-    plt.grid(True, alpha=0.3)
-    plt.savefig(os.path.join(output_dir, "bootstrap_stability.png"), dpi=300, bbox_inches='tight')
-    plt.close()
+    if bootstrap_stability:
+        plt.figure(figsize=(10, 6))
+        plt.errorbar(results_df['k_value'], results_df['bootstrap_mean'], 
+                    yerr=results_df['bootstrap_std'], fmt='o-', capsize=5)
+        plt.title(f'Bootstrap Stability vs k-additivity ({dataset_name}, {representation})')
+        plt.xlabel('k-additivity')
+        plt.ylabel('Bootstrap Accuracy (mean ± std)')
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(output_dir, "bootstrap_stability.png"), dpi=300, bbox_inches='tight')
+        plt.close()
     
     # 5. Accuracy vs parameters trade-off
     plt.figure(figsize=(10, 6))
@@ -319,9 +328,13 @@ def direct_k_additivity_analysis(
     valid_results = results_df.dropna(subset=['baseline_accuracy']).copy()
     if len(valid_results) > 0:
         try:
+            # Select columns based on whether bootstrap stability was calculated
+            plot_columns = ['baseline_accuracy', 'noise_0.05', 'noise_0.1', 'noise_0.2', 'noise_0.3']
+            if bootstrap_stability:
+                plot_columns.append('bootstrap_mean')
+                
             # Select only numeric columns and make sure they're floating point values
-            plot_data = valid_results[['baseline_accuracy', 'noise_0.05', 'noise_0.1', 
-                                   'noise_0.2', 'noise_0.3', 'bootstrap_mean']].astype(float)
+            plot_data = valid_results[plot_columns].astype(float)
             
             # Check if data has any NaN values and fill them
             if plot_data.isna().any().any():
@@ -329,8 +342,10 @@ def direct_k_additivity_analysis(
                 plot_data = plot_data.fillna(0)
             
             # Rename columns for better display
-            plot_data.columns = ['Baseline', 'Noise 0.05', 'Noise 0.10', 
-                                 'Noise 0.20', 'Noise 0.30', 'Bootstrap']
+            column_names = ['Baseline', 'Noise 0.05', 'Noise 0.10', 'Noise 0.20', 'Noise 0.30']
+            if bootstrap_stability:
+                column_names.append('Bootstrap')
+            plot_data.columns = column_names
             
             plt.figure(figsize=(12, 8))
             # Make sure the data is properly transposed and contains only floats
@@ -348,7 +363,9 @@ def direct_k_additivity_analysis(
     if len(valid_results) > 0:
         best_k_accuracy = valid_results['baseline_accuracy'].idxmax()
         best_k_noise03 = valid_results['noise_0.3'].idxmax()
-        best_k_stability = valid_results['bootstrap_std'].idxmin()
+        
+        if bootstrap_stability:
+            best_k_stability = valid_results['bootstrap_std'].idxmin()
         
         # Create summary file
         with open(os.path.join(output_dir, "summary.txt"), 'w') as f:
@@ -362,7 +379,8 @@ def direct_k_additivity_analysis(
             f.write("OPTIMAL K VALUES:\n")
             f.write(f"- Best k for accuracy: {best_k_accuracy} (accuracy: {valid_results.loc[best_k_accuracy, 'baseline_accuracy']:.4f})\n")
             f.write(f"- Best k for noise robustness: {best_k_noise03} (accuracy at noise 0.3: {valid_results.loc[best_k_noise03, 'noise_0.3']:.4f})\n")
-            f.write(f"- Best k for stability: {best_k_stability} (std dev: {valid_results.loc[best_k_stability, 'bootstrap_std']:.4f})\n\n")
+            if bootstrap_stability:
+                f.write(f"- Best k for stability: {best_k_stability} (std dev: {valid_results.loc[best_k_stability, 'bootstrap_std']:.4f})\n\n")
             
             f.write("FULL RESULTS TABLE:\n")
             f.write(results_df.to_string())
@@ -376,26 +394,36 @@ def direct_k_additivity_analysis(
     if len(valid_results) > 0:
         try:
             # Ensure all necessary columns are numeric
-            for col in ['baseline_accuracy', 'noise_0.3', 'bootstrap_std', 'n_params']:
+            for col in ['baseline_accuracy', 'noise_0.3', 'n_params']:
                 valid_results[col] = pd.to_numeric(valid_results[col], errors='coerce')
             
+            if bootstrap_stability:
+                valid_results['bootstrap_std'] = pd.to_numeric(valid_results['bootstrap_std'], errors='coerce')
+            
             # Fill any NaN values that might have appeared
-            valid_results = valid_results.fillna({
+            fill_values = {
                 'baseline_accuracy': 0.0,
                 'noise_0.3': 0.0,
-                'bootstrap_std': 1.0,
                 'n_params': 10.0
-            })
+            }
+            if bootstrap_stability:
+                fill_values['bootstrap_std'] = 1.0
+                
+            valid_results = valid_results.fillna(fill_values)
             
             # Create columns for efficiency metrics using NumPy calculations on numeric data
             valid_results['acc_efficiency'] = valid_results['baseline_accuracy'] / np.log10(valid_results['n_params'] + 10)
             valid_results['noise_efficiency'] = valid_results['noise_0.3'] / np.log10(valid_results['n_params'] + 10)
-            valid_results['stability_efficiency'] = valid_results['stability_efficiency'] = (1 - valid_results['bootstrap_std']) / np.log10(valid_results['n_params'] + 10)
+            
+            if bootstrap_stability:
+                valid_results['stability_efficiency'] = (1 - valid_results['bootstrap_std']) / np.log10(valid_results['n_params'] + 10)
             
             # Find k values with best efficiency
             best_k_eff_acc = valid_results['acc_efficiency'].idxmax()
             best_k_eff_noise = valid_results['noise_efficiency'].idxmax()
-            best_k_eff_stability = valid_results['stability_efficiency'].idxmax()
+            
+            if bootstrap_stability:
+                best_k_eff_stability = valid_results['stability_efficiency'].idxmax()
             
             # Add to summary file
             with open(os.path.join(output_dir, "efficiency_summary.txt"), 'w') as f:
@@ -404,13 +432,16 @@ def direct_k_additivity_analysis(
                 f.write("OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):\n")
                 f.write(f"- Best k for accuracy efficiency: {best_k_eff_acc} (eff: {valid_results.loc[best_k_eff_acc, 'acc_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_acc, 'n_params']:.0f})\n")
                 f.write(f"- Best k for noise robustness efficiency: {best_k_eff_noise} (eff: {valid_results.loc[best_k_eff_noise, 'noise_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_noise, 'n_params']:.0f})\n")
-                f.write(f"- Best k for stability efficiency: {best_k_eff_stability} (eff: {valid_results.loc[best_k_eff_stability, 'stability_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_stability, 'n_params']:.0f})\n")
+                if bootstrap_stability:
+                    f.write(f"- Best k for stability efficiency: {best_k_eff_stability} (eff: {valid_results.loc[best_k_eff_stability, 'stability_efficiency']:.4f}, params: {valid_results.loc[best_k_eff_stability, 'n_params']:.0f})\n")
             
             # Create efficiency plot
             plt.figure(figsize=(12, 8))
             plt.plot(valid_results.index, valid_results['acc_efficiency'], 'o-', label='Accuracy Efficiency')
             plt.plot(valid_results.index, valid_results['noise_efficiency'], 's-', label='Noise Robustness Efficiency')
-            plt.plot(valid_results.index, valid_results['stability_efficiency'], '^-', label='Stability Efficiency')
+            
+            if bootstrap_stability:
+                plt.plot(valid_results.index, valid_results['stability_efficiency'], '^-', label='Stability Efficiency')
             
             plt.title(f'Efficiency Metrics vs k-additivity ({dataset_name}, {representation})')
             plt.xlabel('k-additivity')
@@ -423,18 +454,24 @@ def direct_k_additivity_analysis(
             # Save efficiency values
             results_df['acc_efficiency'] = np.nan
             results_df['noise_efficiency'] = np.nan
-            results_df['stability_efficiency'] = np.nan
+            
+            if bootstrap_stability:
+                results_df['stability_efficiency'] = np.nan
             
             # Only fill values for valid k values
             for k in valid_results.index:
                 results_df.loc[k, 'acc_efficiency'] = valid_results.loc[k, 'acc_efficiency']
                 results_df.loc[k, 'noise_efficiency'] = valid_results.loc[k, 'noise_efficiency']
-                results_df.loc[k, 'stability_efficiency'] = valid_results.loc[k, 'stability_efficiency']
+                
+                if bootstrap_stability:
+                    results_df.loc[k, 'stability_efficiency'] = valid_results.loc[k, 'stability_efficiency']
                 
             # Add most efficient k values to the returned DataFrame for cross-dataset comparison
             results_df.attrs['best_k_eff_acc'] = best_k_eff_acc
             results_df.attrs['best_k_eff_noise'] = best_k_eff_noise
-            results_df.attrs['best_k_eff_stability'] = best_k_eff_stability
+            
+            if bootstrap_stability:
+                results_df.attrs['best_k_eff_stability'] = best_k_eff_stability
             
         except Exception as e:
             print(f"Error calculating efficiency metrics: {e}")
@@ -442,12 +479,23 @@ def direct_k_additivity_analysis(
     print(f"Analysis completed. Results saved to: {output_dir}")
     return results_df
 
-def run_batch_analysis(datasets_list, representation="game", regularization='l2'):
+def run_batch_analysis(datasets_list, representation="game", regularization='l2', bootstrap_stability=True):
     """
     Run k-additivity analysis on multiple datasets.
     Supports passing either:
       - A string dataset name => loaded via func_read_data
       - An in‑memory tuple (label, X, y)
+      
+    Parameters:
+    -----------
+    datasets_list : list
+        List of datasets to analyze (strings or tuples)
+    representation : str, default="game"
+        Choquet representation to use
+    regularization : str, default='l2'
+        Regularization type for logistic regression
+    bootstrap_stability : bool, default=True
+        Whether to perform bootstrap stability analysis
     """
     import traceback
     from mod_GenFuzzyRegression import func_read_data
@@ -478,7 +526,8 @@ def run_batch_analysis(datasets_list, representation="game", regularization='l2'
                 dataset_ref,
                 representation=representation,
                 output_dir=dataset_dir,
-                regularization=regularization
+                regularization=regularization,
+                bootstrap_stability=bootstrap_stability
             )
 
             # Collect summary metrics if valid results exist
@@ -497,10 +546,11 @@ def run_batch_analysis(datasets_list, representation="game", regularization='l2'
                     ds_sum['best_k_noise'] = int(best_k_noise)
                     ds_sum['noise_robustness'] = float(valid_results.loc[best_k_noise, 'noise_0.3'])
 
-                    # Best k for stability (minimum bootstrap std)
-                    best_k_stab = valid_results['bootstrap_std'].idxmin()
-                    ds_sum['best_k_stability'] = int(best_k_stab)
-                    ds_sum['stability'] = float(valid_results.loc[best_k_stab, 'bootstrap_std'])
+                    # Best k for stability (minimum bootstrap std) - only if bootstrap_stability is True
+                    if bootstrap_stability and 'bootstrap_std' in valid_results.columns:
+                        best_k_stab = valid_results['bootstrap_std'].idxmin()
+                        ds_sum['best_k_stability'] = int(best_k_stab)
+                        ds_sum['stability'] = float(valid_results.loc[best_k_stab, 'bootstrap_std'])
 
                     summary_data.append(ds_sum)
                 except Exception as e:
@@ -522,7 +572,10 @@ def run_batch_analysis(datasets_list, representation="game", regularization='l2'
         width = 0.25
         plt.bar(x - width, summary_df['best_k_accuracy'], width, label='Best k (Accuracy)')
         plt.bar(x,          summary_df['best_k_noise'],    width, label='Best k (Noise)')
-        plt.bar(x + width, summary_df['best_k_stability'], width, label='Best k (Stability)')
+        
+        if bootstrap_stability and 'best_k_stability' in summary_df.columns:
+            plt.bar(x + width, summary_df['best_k_stability'], width, label='Best k (Stability)')
+            
         plt.xticks(x, summary_df['dataset'], rotation=45)
         plt.ylabel('Optimal k-additivity')
         plt.title(f'Optimal k-additivity by Dataset ({representation})')
@@ -532,9 +585,16 @@ def run_batch_analysis(datasets_list, representation="game", regularization='l2'
         plt.close()
 
         # Performance heatmap
-        perf = summary_df.set_index('dataset')[['max_accuracy','noise_robustness','stability']]
-        # invert stability so higher is better
-        perf['stability'] = -perf['stability']
+        perf_columns = ['max_accuracy', 'noise_robustness']
+        if bootstrap_stability and 'stability' in summary_df.columns:
+            perf_columns.append('stability')
+        
+        perf = summary_df.set_index('dataset')[perf_columns]
+        
+        # invert stability so higher is better (only if bootstrap_stability is True)
+        if bootstrap_stability and 'stability' in perf.columns:
+            perf['stability'] = -perf['stability']
+            
         plt.figure(figsize=(10, 6))
         sns.heatmap(perf, annot=True, cmap='YlGnBu', fmt='.4f', linewidths=.5)
         plt.title(f'Performance Metrics by Dataset ({representation})')
@@ -558,16 +618,22 @@ def run_batch_analysis(datasets_list, representation="game", regularization='l2'
             n_attr = ds['n_attr']
 
             # Efficiency metrics at optimal ks
-            for key, k in [('accuracy_eff', ds['best_k_accuracy']),
-                           ('noise_eff',    ds['best_k_noise']),
-                           ('stab_eff',     ds['best_k_stability'])]:
+            efficiency_items = [
+                ('accuracy_eff', ds['best_k_accuracy'], 'max_accuracy'),
+                ('noise_eff', ds['best_k_noise'], 'noise_robustness')
+            ]
+            
+            if bootstrap_stability and 'best_k_stability' in ds and 'stability' in ds:
+                efficiency_items.append(('stab_eff', ds['best_k_stability'], 'stability'))
+                
+            for key, k, metric in efficiency_items:
                 params = nParam_kAdd(k, n_attr)
                 if key == 'accuracy_eff':
-                    val = ds['max_accuracy'] / np.log10(params + 10)
+                    val = ds[metric] / np.log10(params + 10)
                 elif key == 'noise_eff':
-                    val = ds['noise_robustness'] / np.log10(params + 10)
-                else:
-                    val = (1 - ds['stability']) / np.log10(params + 10)
+                    val = ds[metric] / np.log10(params + 10)
+                else:  # stability_eff
+                    val = (1 - ds[metric]) / np.log10(params + 10)
                 efficiency_data.append({
                     'dataset': dataset,
                     'metric': key,
@@ -579,7 +645,12 @@ def run_batch_analysis(datasets_list, representation="game", regularization='l2'
             eff_pivot.to_csv(os.path.join(main_dir, f"efficiency_summary_{representation}.csv"))
             # Plot efficiency
             plt.figure(figsize=(12, 6))
-            for metric, style in zip(['accuracy_eff','noise_eff','stab_eff'], ['o-','s-','^-']):
+            
+            metrics_to_plot = ['accuracy_eff', 'noise_eff']
+            if bootstrap_stability:
+                metrics_to_plot.append('stab_eff')
+                
+            for metric, style in zip(metrics_to_plot, ['o-','s-','^-']):
                 if metric in eff_pivot:
                     plt.plot(eff_pivot.index, eff_pivot[metric], style, label=metric)
             plt.xticks(rotation=45)
@@ -880,19 +951,25 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
     print(f"Feature dropout analysis completed. Results saved to: {output_dir}")
     return all_results
 
-#if __name__ == "__main__":
-if 1 == 0:
-    datasets = [        "pairwise_interaction",]
+if __name__ == "__main__":
+#if 1 == 0:
+    base_X, base_y = func_read_data("pure_pairwise_interaction")
+    base_triwise_x, base_triwise_y = func_read_data("triplet_interaction")
+    datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin',
+                ("pure_pairwise_interaction",base_X,base_y),
+                ("triplet_interaction",base_triwise_x,base_triwise_y),
+                ]
     
     # Choose the representation type - can be "game", "mobius", or "shapley"
-    representations = ["game", "mobius", "shapley"]
+    representations = ["shapley"]
     
     # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
-    regularizations = [None,'l2']
+    regularizations = ['l2']
 
     run_k_additivity = True
-    run_feature_dropout = True
-    max_features_to_drop = 2  
+    run_bootstrap_stability = False 
+    run_feature_dropout = False
+    max_features_to_drop = 1  
 
     # Loop through both representations and regularizations
     for representation in representations:
@@ -909,7 +986,12 @@ if 1 == 0:
             # Run the regular k-additivity analysis
             if run_k_additivity:
                 print("\nRunning k-additivity analysis...")
-                run_batch_analysis(datasets_list=datasets, representation=representation, regularization=regularization)
+                run_batch_analysis(
+                    datasets_list=datasets, 
+                    representation=representation, 
+                    regularization=regularization,
+                    bootstrap_stability=run_bootstrap_stability 
+                )
             
             # Run feature dropout analysis for each dataset
             if run_feature_dropout:
@@ -930,32 +1012,35 @@ if 1 == 0:
                         regularization=regularization
                     )
 
-if __name__ == "__main__":
+
+#if __name__ == "__main__":
+if 1 == 0:
     # 1) Load base dataset
-    base_X, base_y = func_read_data("pairwise_interaction")
+    base_X, base_y = func_read_data("pure_pairwise_interaction")  # Change to use the new dataset
     features = list(range(base_X.shape[1]))
 
     # 2) Prepare in‑memory datasets (label, X, y)
     datasets = [
-        ("pairwise_interaction",        base_X,                                                  base_y),
-        ("pairwise_interaction_bias",   add_bias(base_X,   features, bias=0.5),                    base_y),
-        ("pairwise_interaction_scaled", scale_features(base_X, features, factor=2.0),                base_y),
-        ("pairwise_interaction_noisy",  add_gaussian_noise(base_X, features, std=0.1, random_state=42), base_y),
-        ("pairwise_interaction_log",    log_transform(base_X, features),                           base_y),
-        ("pairwise_interaction_power2", power_transform(base_X, features, exponent=2.0),             base_y),
-        ("pairwise_interaction_tanh",   tanh_transform(base_X, features),                          base_y),
-        ("pairwise_interaction_threshold",
+        ("pure_pairwise_interaction",        base_X,                                                  base_y),
+        ("pure_pairwise_interaction_bias",   add_bias(base_X,   features, bias=0.5),                    base_y),
+        ("pure_pairwise_interaction_scaled", scale_features(base_X, features, factor=2.0),                base_y),
+        ("pure_pairwise_interaction_noisy",  add_gaussian_noise(base_X, features, std=0.1, random_state=42), base_y),
+        ("pure_pairwise_interaction_log",    log_transform(base_X, features),                           base_y),
+        ("pure_pairwise_interaction_power2", power_transform(base_X, features, exponent=2.0),             base_y),
+        ("pure_pairwise_interaction_tanh",   tanh_transform(base_X, features),                          base_y),
+        ("pure_pairwise_interaction_threshold",
                                          threshold_features(base_X, features,
                                                             threshold=0.0,
                                                             above_value=1.0,
                                                             below_value=0.0),              base_y),
-        ("pairwise_interaction_clipped", clip_features(base_X, features, min_val=0.0, max_val=1.0),    base_y),
+        ("pure_pairwise_interaction_clipped", clip_features(base_X, features, min_val=0.0, max_val=1.0),    base_y),
     ]
 
     # 3) Experiment settings
-    representations     = ["shapley", "mobius", "game"]
+    representations     = ["shapley"]
     regularizations     = [None,'l1','l2']
     run_k_additivity    = True
+    run_bootstrap_stability = False
     run_feature_dropout = False
     max_features_to_drop = 2
 
@@ -973,7 +1058,8 @@ if __name__ == "__main__":
                 run_batch_analysis(
                     datasets_list=datasets,
                     representation=representation,
-                    regularization=regularization
+                    regularization=regularization,
+                    bootstrap_stability=run_bootstrap_stability
                 )
 
             # feature‑dropout analysis
