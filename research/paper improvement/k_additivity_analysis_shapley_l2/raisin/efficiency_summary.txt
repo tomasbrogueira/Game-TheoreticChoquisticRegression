@@ -3,4 +3,4 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR raisin (shapley)
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
 - Best k for accuracy efficiency: 1 (eff: 0.6845, params: 8)
-- Best k for noise robustness efficiency: 1 (eff: 0.6704, params: 8)
+- Best k for noise robustness efficiency: 1 (eff: 0.6768, params: 8)
