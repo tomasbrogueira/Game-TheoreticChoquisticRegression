@@ -1,0 +1,6 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR pure_pairwise_interaction (mobius)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 2 (eff: 0.3637, params: 121)
+- Best k for noise robustness efficiency: 2 (eff: 0.3539, params: 121)

@@ -1,0 +1,6 @@
+Dataset: rice
+Representation: game
+Number of samples: 4360
+Number of attributes: 7
+Train samples: 3052
+Test samples: 1308

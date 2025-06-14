@@ -2,6 +2,5 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR rice (game)
 ============================================================
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
-- Best k for accuracy efficiency: 1 (eff: 0.5725, params: 8)
-- Best k for noise robustness efficiency: 1 (eff: 0.5586, params: 8)
-- Best k for stability efficiency: 1 (eff: 0.7851, params: 8)
+- Best k for accuracy efficiency: 1 (eff: 0.5573, params: 8)
+- Best k for noise robustness efficiency: 1 (eff: 0.5604, params: 8)

@@ -2,6 +2,5 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR mammographic (game)
 ============================================================
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
-- Best k for accuracy efficiency: 1 (eff: 0.5823, params: 5)
-- Best k for noise robustness efficiency: 1 (eff: 0.5856, params: 5)
-- Best k for stability efficiency: 1 (eff: 0.8186, params: 5)
+- Best k for accuracy efficiency: 1 (eff: 0.6385, params: 5)
+- Best k for noise robustness efficiency: 1 (eff: 0.6279, params: 5)

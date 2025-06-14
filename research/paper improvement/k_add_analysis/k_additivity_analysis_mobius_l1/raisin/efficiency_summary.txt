@@ -1,0 +1,6 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR raisin (mobius)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 1 (eff: 0.6786, params: 8)
+- Best k for noise robustness efficiency: 1 (eff: 0.6509, params: 8)

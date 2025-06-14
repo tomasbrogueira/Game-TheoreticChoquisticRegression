@@ -961,10 +961,10 @@ if __name__ == "__main__":
                 ]
     
     # Choose the representation type - can be "game", "mobius", or "shapley"
-    representations = ["shapley"]
+    representations = ["mobius"]  # Options: 'game', 'mobius', 'shapley'
     
     # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
-    regularizations = ['l2']
+    regularizations = [None,'l1','l2']
 
     run_k_additivity = True
     run_bootstrap_stability = False 

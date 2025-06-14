@@ -1,0 +1,6 @@
+Dataset: transfusion
+Representation: game
+Number of samples: 1140
+Number of attributes: 4
+Train samples: 798
+Test samples: 342

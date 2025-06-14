@@ -1,0 +1,6 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR transfusion (mobius)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 1 (eff: 0.6066, params: 5)
+- Best k for noise robustness efficiency: 1 (eff: 0.6066, params: 5)

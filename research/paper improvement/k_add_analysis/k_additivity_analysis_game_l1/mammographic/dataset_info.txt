@@ -1,0 +1,6 @@
+Dataset: mammographic
+Representation: game
+Number of samples: 856
+Number of attributes: 4
+Train samples: 599
+Test samples: 257

@@ -1,0 +1,6 @@
+COMPLEXITY-EFFICIENCY ANALYSIS FOR triplet_interaction (mobius)
+============================================================
+
+OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
+- Best k for accuracy efficiency: 1 (eff: 0.3699, params: 16)
+- Best k for noise robustness efficiency: 1 (eff: 0.3699, params: 16)
