@@ -45,6 +45,7 @@ from dataset_operations import (add_gaussian_noise,
                                 clip_features
 )
 
+from plotting_functions import plot_model_coefficients
 
 def direct_k_additivity_analysis(
     dataset, 
@@ -129,7 +130,7 @@ def direct_k_additivity_analysis(
         'n_params', 
         'train_time', 
         'baseline_accuracy',
-        'noise_0.05', 'noise_0.1', 'noise_0.2', 'noise_0.3'
+        'noise_0.1', 'noise_0.2', 'noise_0.3'
     ]
     
     if bootstrap_stability:
@@ -177,12 +178,11 @@ def direct_k_additivity_analysis(
                 penalty=None if regularization == 'none' else regularization
             )
             model.fit(X_train_choquet, y_train_values)
+            model.coef_ = model.coef_.astype(np.float64)
+            model.intercept_ = model.intercept_.astype(np.float64)
             train_time = time.time() - start_time
             results_df.loc[k, 'train_time'] = train_time
-            
-            print(f"- Trained with {n_params} parameters in {train_time:.2f} seconds")
-            
-            # Transform test data and evaluate baseline performance
+        
             X_test_choquet = choquet_transform(X_test_scaled, k_add=k)
             y_pred = model.predict(X_test_choquet)
             baseline_acc = accuracy_score(y_test_values, y_pred)
@@ -191,7 +191,7 @@ def direct_k_additivity_analysis(
             
             # Noise robustness testing
             print("- Testing noise robustness...")
-            noise_levels = [0.05, 0.1, 0.2, 0.3]
+            noise_levels = [0.1, 0.2, 0.3]
             
             for noise_level in noise_levels:
                 noise_accuracies = []
@@ -275,9 +275,9 @@ def direct_k_additivity_analysis(
     # 3. Noise robustness comparison
     plt.figure(figsize=(12, 8))
     cmap = get_cmap('viridis')
-    colors = cmap(np.linspace(0, 1, 4))  # 4 noise levels
+    colors = cmap(np.linspace(0, 1, 3))  # 3 noise levels
     
-    noise_levels = [0.05, 0.1, 0.2, 0.3]
+    noise_levels = [0.1, 0.2, 0.3]
     for i, noise_level in enumerate(noise_levels):
         plt.plot(results_df['k_value'], results_df[f'noise_{noise_level}'], 'o-', 
                  color=colors[i], linewidth=2, label=f'Noise level: {noise_level}')
@@ -329,7 +329,7 @@ def direct_k_additivity_analysis(
     if len(valid_results) > 0:
         try:
             # Select columns based on whether bootstrap stability was calculated
-            plot_columns = ['baseline_accuracy', 'noise_0.05', 'noise_0.1', 'noise_0.2', 'noise_0.3']
+            plot_columns = ['baseline_accuracy', 'noise_0.1', 'noise_0.2', 'noise_0.3']
             if bootstrap_stability:
                 plot_columns.append('bootstrap_mean')
                 
@@ -342,7 +342,7 @@ def direct_k_additivity_analysis(
                 plot_data = plot_data.fillna(0)
             
             # Rename columns for better display
-            column_names = ['Baseline', 'Noise 0.05', 'Noise 0.10', 'Noise 0.20', 'Noise 0.30']
+            column_names = ['Baseline', 'Noise 0.10', 'Noise 0.20', 'Noise 0.30']
             if bootstrap_stability:
                 column_names.append('Bootstrap')
             plot_data.columns = column_names
@@ -954,20 +954,18 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
 if __name__ == "__main__":
 #if 1 == 0:
     base_X, base_y = func_read_data("pure_pairwise_interaction")
-    base_triwise_x, base_triwise_y = func_read_data("triplet_interaction")
     datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin',
                 ("pure_pairwise_interaction",base_X,base_y),
-                ("triplet_interaction",base_triwise_x,base_triwise_y),
                 ]
     
     # Choose the representation type - can be "game", "mobius", or "shapley"
-    representations = ["mobius"]  # Options: 'game', 'mobius', 'shapley'
+    representations = ["shapley"]  # Options: 'game', 'mobius', 'shapley'
     
     # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
-    regularizations = [None,'l1','l2']
+    regularizations = ['l2']
 
     run_k_additivity = True
-    run_bootstrap_stability = False 
+    run_bootstrap_stability = True 
     run_feature_dropout = False
     max_features_to_drop = 1  
 

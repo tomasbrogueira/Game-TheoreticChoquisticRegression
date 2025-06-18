@@ -9,6 +9,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.linear_model import LogisticRegression
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 from matplotlib.cm import get_cmap
@@ -39,6 +41,7 @@ from dataset_operations import (
     threshold_features,
     clip_features
 )
+from plotting_functions import plot_model_coefficients
 
 def indices_from_shapley_coefficients(coeffs, n_attr, k_add=None):
     """
@@ -50,7 +53,7 @@ def indices_from_shapley_coefficients(coeffs, n_attr, k_add=None):
         k_add = n_attr
 
     phi = coeffs[:n_attr]
-    inter_values = coeffs[n_attr:n_attr + k_add - 1]
+    inter_values = coeffs[n_attr:]
 
     return phi, inter_values
 
@@ -223,6 +226,9 @@ def compute_indices_robustness(
                 model.fit(X_train_shapley, y_train_values)
                 train_time = time.time() - start_time
                 results_df.loc[k, 'train_time'] = train_time
+                
+                # Generate coefficient plot for the model
+                plot_model_coefficients(model, k, nAttr, "shapley", dataset_name, output_dir)
                 
                 # Extract model coefficients
                 coeffs = model.coef_[0] if model.coef_.shape[0] == 1 else model.coef_
@@ -655,39 +661,34 @@ def compute_indices_robustness(
     
     return results_df, all_indices
 
-def run_batch_indices_analysis(datasets, output_dir=None, **kwargs):
+def run_batch_indices_analysis(datasets):
     """
-    Run indices robustness analysis for multiple datasets in batch mode.
+    Run analysis on multiple datasets and return summary statistics.
     
     Parameters:
-    -----------
-    datasets : list of tuples
-        Each tuple contains (dataset_name, X, y)
-    output_dir : str, optional
-        Main directory to save results
-    kwargs : dict
-        Additional parameters for compute_indices_robustness
+    datasets - Either a dictionary {name: (X, y)} or a list of (name, X, y) tuples
+    
+    Returns:
+    summary_df - DataFrame with summary metrics
+    all_indices - Dictionary with detailed indices for each dataset
     """
-    # Create main output directory if specified, otherwise use default
-    if output_dir is None:
-        output_dir = "indices_robustness"
-    
-    os.makedirs(output_dir, exist_ok=True)
-    
+    results = []
     all_indices = {}
-    summary = pd.DataFrame(columns=['dataset', 'k_value', 'n_params', 'train_time', 
-                                   'baseline_accuracy', 'shapeley_stability'])
     
-    for dataset in tqdm(datasets, desc="Processing datasets"):
-        dataset_name, X, y = dataset
-        
-        # Create dataset-specific subdirectory
-        dataset_dir = os.path.join(output_dir, dataset_name)
-        
-        # Compute indices robustness for this dataset
+    # Handle datasets whether it's a dictionary or a list
+    if isinstance(datasets, dict):
+        dataset_items = [(name, data) for name, data in datasets.items()]
+    else:
+        dataset_items = [(name, (X, y)) for name, X, y in datasets]
+    
+    for dataset_name, (X, y) in dataset_items:
         try:
+            # Create dataset-specific subdirectory
+            dataset_dir = os.path.join("indices_robustness", dataset_name)
+            
+            # Compute indices robustness for this dataset
             result_df, indices = compute_indices_robustness(
-                (dataset_name, X, y), output_dir=dataset_dir, **kwargs
+                (dataset_name, X, y), output_dir=dataset_dir
             )
             
             if result_df is not None and not result_df.empty:
@@ -712,7 +713,7 @@ def run_batch_indices_analysis(datasets, output_dir=None, **kwargs):
                     else:
                         new_row['shapley_stability'] = np.nan
                         
-                    summary = pd.concat([summary, pd.DataFrame([new_row])], ignore_index=True)
+                    results.append(new_row)
             else:
                 print(f"Warning: No results returned for dataset {dataset_name}")
         
@@ -721,17 +722,20 @@ def run_batch_indices_analysis(datasets, output_dir=None, **kwargs):
             import traceback
             traceback.print_exc()
     
+    # Convert results to DataFrame
+    summary_df = pd.DataFrame(results)
+    
     # Save overall summary
-    if not summary.empty:
-        summary.to_csv(os.path.join(output_dir, "overall_summary.csv"), index=False)
+    if not summary_df.empty:
+        summary_df.to_csv(os.path.join("indices_robustness", "overall_summary.csv"), index=False)
     
     # Create cross-dataset comparison plots
     try:
-        if not summary.empty and 'shapley_stability' in summary.columns:
+        if not summary_df.empty and 'shapley_stability' in summary_df.columns:
             # Stability vs k for all datasets
             plt.figure(figsize=(12, 8))
-            for name in summary['dataset'].unique():
-                dataset_summary = summary[summary['dataset'] == name]
+            for name in summary_df['dataset'].unique():
+                dataset_summary = summary_df[summary_df['dataset'] == name]
                 if 'shapley_stability' in dataset_summary.columns and not dataset_summary['shapley_stability'].isnull().all():
                     plt.plot(dataset_summary['k_value'], dataset_summary['shapley_stability'], 'o-', 
                             linewidth=2, label=name)
@@ -742,33 +746,53 @@ def run_batch_indices_analysis(datasets, output_dir=None, **kwargs):
             plt.grid(True, alpha=0.3)
             plt.legend(loc='best')
             plt.ylim([0, 1])
-            plt.savefig(os.path.join(output_dir, "cross_dataset_stability.png"), dpi=300, bbox_inches='tight')
+            plt.savefig(os.path.join("indices_robustness", "cross_dataset_stability.png"), dpi=300, bbox_inches='tight')
             plt.close()
     except Exception as e:
         print(f"Error creating cross-dataset plots: {e}")
     
-    return summary, all_indices
+    return summary_df, all_indices
 
-# ...existing code...
 if __name__ == "__main__":
-    # 1) Load base dataset
-    base_X, base_y = func_read_data("pairwise_interaction")
-    features = list(range(base_X.shape[1]))
+    # Define datasets first
+    datasets = []
     
-    # 2) Prepare in-memory datasets with various transformations
-    datasets = [
-        ("pairwise_interaction", base_X, base_y),
-        ("pairwise_interaction_bias", add_bias(base_X, features, bias=0.5), base_y),
-        ("pairwise_interaction_scaled", scale_features(base_X, features, factor=2.0), base_y),
-        ("pairwise_interaction_noisy", add_gaussian_noise(base_X, features, std=0.1, random_state=42), base_y),
-        ("pairwise_interaction_log", log_transform(base_X, features), base_y),
-        ("pairwise_interaction_power2", power_transform(base_X, features, exponent=2.0), base_y),
-        ("pairwise_interaction_tanh", tanh_transform(base_X, features), base_y),
-        ("pairwise_interaction_threshold", 
-         threshold_features(base_X, features, threshold=0.0, above_value=1.0, below_value=0.0), base_y),
-        ("pairwise_interaction_clipped", clip_features(base_X, features, min_val=0.0, max_val=1.0), base_y)
-    ]
+    # Load your datasets here
+    # For example:
+    # dataset_names = ["dados_covid_sbpo_atual", "banknotes", "transfusion", ...]
+    # for dataset in dataset_names:
+    #     base_x, base_y = load_dataset(dataset)
+    #     datasets.append((dataset, base_x, base_y))
     
+    # Then check its type and process it
+    if isinstance(datasets, list):
+        datasets_dict = {name: (X, y) for name, X, y in datasets}
+        summary, all_indices = run_batch_indices_analysis(datasets_dict)
+    else:
+        summary, all_indices = run_batch_indices_analysis(datasets)
+    dataset_list = [ "pure_pairwise_interaction","triplet_interaction",
+    'dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin']
+    datasets = {}
+    for dataset in dataset_list:
+        base_x, base_y = func_read_data(dataset)
+        datasets[dataset] = (base_x, base_y)
+
+    # 3) Run batch analysis - use the batch function instead of the individual function
+    summary, all_indices = run_batch_indices_analysis(datasets)
+    print("\nBatch analysis completed. Summary of results:")
+    print(summary)
+    dataset_list = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin']
+    datasets = []
+    for dataset in dataset_list:
+        base_x, base_y = func_read_data(dataset)
+        datasets.append((dataset, base_x, base_y))
+
+    # 3) Run batch analysis - use the batch function instead of the individual function
+    summary, all_indices = run_batch_indices_analysis(datasets)
+    print("\nBatch analysis completed. Summary of results:")
+    print(summary)
+    datasets.append((dataset, base_x, base_y))
+
     # 3) Run batch analysis - use the batch function instead of the individual function
     summary, all_indices = run_batch_indices_analysis(datasets)
     print("\nBatch analysis completed. Summary of results:")

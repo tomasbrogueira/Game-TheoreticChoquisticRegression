@@ -1,0 +1,24 @@
+K-ADDITIVITY ANALYSIS SUMMARY FOR dados_covid_sbpo_atual (shapley)
+============================================================
+
+Dataset: dados_covid_sbpo_atual
+Representation: shapley
+Number of attributes: 9
+Number of samples: 87446
+
+OPTIMAL K VALUES:
+- Best k for accuracy: 6 (accuracy: 0.6946)
+- Best k for noise robustness: 8 (accuracy at noise 0.3: 0.6904)
+- Best k for stability: 1 (std dev: 0.0028)
+
+FULL RESULTS TABLE:
+  k_value n_params  train_time baseline_accuracy noise_0.1 noise_0.2 noise_0.3 bootstrap_mean bootstrap_std
+1       1       10    0.129865           0.68659  0.686651  0.685256  0.683563        0.68663      0.002783
+2       2       46    0.512209          0.689373  0.689678  0.688923  0.687398       0.690206        0.0037
+3       3      130    1.694187          0.693756  0.692971  0.691439  0.688008       0.693964      0.003306
+4       4      256    9.451031          0.694061  0.694153  0.692071  0.689586       0.693953       0.00371
+5       5      382   44.790107           0.69448  0.694115  0.692552  0.689662       0.694759      0.003013
+6       6      466   95.360015          0.694633  0.694519  0.692849  0.689281       0.694223      0.003385
+7       7      502  105.891985          0.694633  0.694374  0.692521  0.690135       0.695562      0.002904
+8       8      511  117.657714          0.694633  0.694206  0.693268  0.690425       0.694658      0.003355
+9       9      512  116.459065          0.694633  0.694694  0.692948  0.689777        0.69471      0.003624

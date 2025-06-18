@@ -1,0 +1,5 @@
+Dataset: raisin
+Number of samples: 900
+Number of attributes: 7
+Train samples: 630
+Test samples: 270

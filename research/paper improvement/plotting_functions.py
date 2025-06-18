@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
+import os
 from os.path import join
 from simulation_helper_functions import plot_horizontal_bar, ensure_folder
+from itertools import combinations
 
 def plot_shapley_full(feature_names, all_shapley_full, plot_folder):
     if not all_shapley_full:
@@ -450,3 +452,90 @@ def plot_banzhaf_indices(feature_names, banzhaf_indices, plot_folder, method):
     )
     
     print(f"Saved Banzhaf indices plot for {method} to: {filename}")
+
+def plot_model_coefficients(model, k, nAttr, representation, dataset_name, output_dir):
+    """
+    Create a horizontal bar plot of model coefficients ordered by absolute value.
+    
+    Parameters:
+    -----------
+    model : LogisticRegression model
+        The trained model containing coefficients
+    k : int
+        k-additivity value of the model
+    nAttr : int
+        Number of attributes in the dataset
+    representation : str
+        Choquet representation used ("game", "mobius", or "shapley")
+    dataset_name : str
+        Name of the dataset being analyzed
+    output_dir : str
+        Directory to save the plot
+    """
+    # Create directory for coefficient plots
+    coef_plots_dir = os.path.join(output_dir, "coefficient_plots")
+    os.makedirs(coef_plots_dir, exist_ok=True)
+    
+    # Extract coefficients from model
+    coefficients = model.coef_[0]  # For binary classification, first row contains coefficients
+    intercept = model.intercept_[0]
+    
+    # Generate appropriate labels based on k-additivity
+    labels = []
+    if representation == "mobius" or representation == "shapley":
+        # For Mobius and Shapley, coefficients represent singletons and combinations
+        # Start with singletons
+        labels = [f"X{i+1}" for i in range(nAttr)]
+        
+        # Add interaction terms for k > 1
+        if k > 1:
+            for r in range(2, k + 1):
+                for combo in combinations(range(nAttr), r):
+                    labels.append(",".join(f"X{i+1}" for i in combo))
+    else:  # game representation
+        # For game representation, coefficients typically correspond to coalitional values
+        for r in range(1, k + 1):
+            for combo in combinations(range(nAttr), r):
+                labels.append(",".join(f"X{i+1}" for i in combo))
+    
+    # Verify label count matches coefficient count
+    if len(labels) != len(coefficients):
+        print(f"Warning: Label count ({len(labels)}) doesn't match coefficient count ({len(coefficients)})")
+        # Fallback to generic labels
+        labels = [f"Coef {i+1}" for i in range(len(coefficients))]
+    
+    # Sort by absolute value (largest to smallest)
+    sorted_indices = np.argsort(np.abs(coefficients))[::-1]
+    sorted_coefs = coefficients[sorted_indices]
+    sorted_labels = [labels[i] for i in sorted_indices]
+    
+    # Create horizontal bar plot
+    plt.figure(figsize=(10, max(6, len(sorted_coefs) * 0.3)))
+    bars = plt.barh(range(len(sorted_coefs)), sorted_coefs)
+    
+    # Color code based on sign
+    for i, bar in enumerate(bars):
+        if sorted_coefs[i] < 0:
+            bar.set_color('indianred')
+        else:
+            bar.set_color('steelblue')
+            
+    plt.yticks(range(len(sorted_coefs)), sorted_labels)
+    plt.xlabel('Coefficient Value')
+    plt.title(f'Model Coefficients for k={k} ({dataset_name}, {representation})')
+    plt.axvline(x=0, color='gray', linestyle='--', alpha=0.7)
+    plt.grid(axis='x', linestyle='--', alpha=0.7)
+    
+    # Invert y-axis to show largest coefficients at the top
+    plt.gca().invert_yaxis()
+    
+    plt.tight_layout()
+    
+    # Add intercept value as text annotation
+    plt.figtext(0.01, 0.01, f"Intercept: {intercept:.4f}", fontsize=10)
+    
+    # Save plot
+    plt.savefig(os.path.join(coef_plots_dir, f"coefficients_k{k}.png"), dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"- Saved coefficient plot for k={k} to {coef_plots_dir}")
