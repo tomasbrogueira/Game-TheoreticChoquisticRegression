@@ -24,10 +24,11 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
     
     Parameters
     ----------
-    representation : str, default="game"
+    representation : str, default="shapley"
         For method="choquet", defines the representation to use:
         - "game": Uses game-based representation
         - "mobius": Uses Möbius representation
+        - "shapley": Uses Shapley representation
     k_add : int or None, default=None
         Additivity level for k-additive models. If not specified and method is 
         "choquet", defaults to using all features.
