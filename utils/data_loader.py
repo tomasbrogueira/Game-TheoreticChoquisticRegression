@@ -39,17 +39,17 @@ def func_read_data(data_imp):
     if data_imp == "banknotes":
         # Banknote authentication dataset - UCI
         file_path = os.path.join(data_dir, "data_banknotes.csv")
-        dataset = pd.read_csv(file_path)
+        dataset = pd.read_csv(file_path, header=None)
         vals = dataset.values
-        X = dataset.loc[:, dataset.columns != "authentic"]
-        y = vals[:, 4]
+        X = dataset.iloc[:, :-1]
+        y = vals[:, -1]
 
     elif data_imp == "transfusion":
         # Blood Transfusion Service Center Data Set dataset - UCI
         file_path = os.path.join(data_dir, "transfusion.csv")
         dataset = pd.read_csv(file_path)
         vals = dataset.values
-        X = dataset.iloc[:, 0:-1]
+        X = dataset.iloc[:, :-1]
         y = vals[:, -1]
 
     elif data_imp == "mammographic":

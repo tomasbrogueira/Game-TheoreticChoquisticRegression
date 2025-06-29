@@ -1,10 +1,10 @@
 # PIC-I: Game-theoretic Extensions of Logistic Regression
 
-This repository contains the implementation of game-theoretic extensions to logistic regression, focusing on the Choquet integral and other aggregation functions. The project aims to capture non-linear interactions between parameters while maintaining interpretability and efficiency of logistic regression models.
+This repository contains the implementation of game-theoretic extensions to logistic regression, focusing on the Choquet integral. The project aims to capture non-linear interactions between parameters while maintaining interpretability and efficiency of logistic regression models.
 
 ## Project Overview
 
-The PIC-I is my end of Bachelor's project. This project extends traditional logistic regression by incorporating aggregation functions like the Choquet integral and Multi-Linear Model (MLM). These extensions allow the model to capture complex non-linear interactions between features while preserving the interpretability advantages of logistic regression.
+The PIC-I is my end of Bachelor's project. This project extends traditional logistic regression by incorporating the Choquet integral. This extension allows the model to capture complex non-linear interactions between features while preserving the interpretability advantages of logistic regression.
 
 ### Key Features
 
@@ -20,7 +20,6 @@ PIC-I/
 ├── core/                # Core implementation
 │   ├── models/          # Model implementations
 │   │   ├── choquet.py   # Choquet integral implementations
-│   │   ├── mlm.py       # Multi-Linear Model implementations
 │   │   └── regression.py # ChoquisticRegression model
 │   └── __init__.py
 ├── utils/               # Utility functions
@@ -61,7 +60,6 @@ Each representation has its own interpretability properties and is suitable for 
 ```bash
 git clone https://github.com/tomasbrogueira/PIC-I.git
 cd PIC-I
-```
 ```
 
 2. Install the package in development mode:
@@ -126,7 +124,6 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_
 
 # Create and train model with game representation
 model_game = ChoquisticRegression(
-    method="choquet",
     representation="game",
     k_add=2,
     scale_data=True
@@ -135,16 +132,16 @@ model_game.fit(X_train, y_train)
 
 # Create and train model with Mobius representation
 model_mobius = ChoquisticRegression(
-    method="choquet",
     representation="mobius",
     k_add=2,
     scale_data=True
 )
 model_mobius.fit(X_train, y_train)
 
-# Create and train model with Shapley representation (2-additive)
+# Create and train model with Shapley representation (k=2)
 model_shapley = ChoquisticRegression(
-    method="choquet_2add",
+    representation="shapley",
+    k_add=2,
     scale_data=True
 )
 model_shapley.fit(X_train, y_train)
@@ -217,7 +214,7 @@ from utils.visualization.plotting import plot_model_performance_comparison, plot
 models = {
     "Game (k=2)": model_game,
     "Mobius (k=2)": model_mobius,
-    "Shapley (2-add)": model_shapley
+    "Shapley (k=2)": model_shapley
 }
 
 # Test robustness
@@ -289,17 +286,18 @@ plot_interaction_matrix_mobius(
 ### Shapley Representation
 
 ```python
-from utils.visualization.plotting import plot_shapley_2add, plot_interaction_matrix_2add
+from utils.visualization.plotting import plot_coefficients, plot_interaction_matrix
 
-# Plot Shapley values for 2-additive Shapley representation
-plot_shapley_2add(
+# Plot model coefficients
+plot_coefficients(
     feature_names=X.columns,
-    all_shapley_values=[shapley_values],  # List of Shapley values from multiple runs
-    plot_folder="results/visualization"
+    all_coefficients=[model_shapley.coef_],
+    plot_folder="results/visualization",
+    k_add=2
 )
 
-# Plot interaction matrix for 2-additive Shapley representation
-plot_interaction_matrix_2add(
+# Plot interaction matrix for Shapley representation
+plot_interaction_matrix(
     feature_names=X.columns,
     all_interaction_matrices=[interaction_matrix],  # List of interaction matrices from multiple runs
     plot_folder="results/visualization"

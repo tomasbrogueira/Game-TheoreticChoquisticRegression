@@ -8,10 +8,10 @@ Number of samples: 1140
 
 OPTIMAL K VALUES:
 - Best k for accuracy: 3 (accuracy: 0.7105)
-- Best k for noise robustness: 4 (accuracy at noise 0.3: 0.6901)
+- Best k for noise robustness: 3 (accuracy at noise 0.3: 0.6936)
 FULL RESULTS TABLE:
-  k_value n_params train_time baseline_accuracy noise_0.05 noise_0.1 noise_0.2 noise_0.3
-1       1        5   0.004263          0.616959   0.611696  0.602924  0.580702  0.580117
-2       2       11      0.003          0.692982   0.695322  0.690643  0.667836  0.661988
-3       3       15      0.003          0.710526   0.707602  0.702924  0.699415  0.681871
-4       4       16   0.003999          0.710526   0.708187  0.707018  0.692982  0.690058
+  k_value n_params train_time baseline_accuracy noise_0.1 noise_0.2 noise_0.3
+1       1        5   0.003999          0.616959  0.590643  0.585965  0.569006
+2       2       11   0.001999          0.692982  0.684211  0.687719  0.667251
+3       3       15   0.003002          0.710526   0.70117  0.694152  0.693567
+4       4       16   0.003999          0.710526  0.704094  0.691228  0.684211

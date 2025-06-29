@@ -405,19 +405,15 @@ def generate_threshold_interaction_dataset(n_samples=1000, n_features=15,
 
 def generate_pure_pairwise_interaction_dataset(n_samples=1000, n_features=15, 
                                               feature_var=1.5, noise_level=0.3, margin=0.0):
-    """Generate dataset with pure pairwise feature interactions without using absolute values"""
     X = np.random.normal(0, feature_var, size=(n_samples, n_features))
     y = np.zeros(n_samples)
     
-    # Create pairwise interactions with pure multiplication (no absolute value)
     for i in range(0, n_features-1, 2):
         if i+1 < n_features:
-            # Pure multiplication without absolute value
             y += 2.5 * (X[:, i] * X[:, i+1])
     
     y += np.random.normal(0, noise_level, size=n_samples)
     
-    # Apply class separation with margin
     y_binary, keep_mask = enhance_class_separation(y, margin)
     
     if margin > 0:

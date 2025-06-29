@@ -79,207 +79,48 @@ def plot_horizontal_bar(names, values, title, xlabel, filename=None, color="stee
 
 
 # ============================================================================
-# Game representation visualization functions
-# ============================================================================
-
-def plot_shapley_game(feature_names, all_shapley_values, plot_folder):
-    """
-    Plot Shapley values for game representation.
-    
-    Parameters
-    ----------
-    feature_names : list
-        Names of features
-    all_shapley_values : list of arrays
-        Shapley values from multiple runs
-    plot_folder : str
-        Folder to save the plot
-    """
-    if not all_shapley_values:
-        print("No game representation Shapley values computed; skipping plot.")
-        return
-    
-    all_shapley_arr = np.vstack(all_shapley_values)
-    mean_shapley = np.mean(all_shapley_arr, axis=0)
-    std_shapley = np.std(all_shapley_arr, axis=0)
-    
-    # Print value range for verification
-    print(f"Game representation Shapley values range: {np.min(mean_shapley):.4f} to {np.max(mean_shapley):.4f}")
-    print(f"Game representation Shapley average magnitude: {np.mean(np.abs(mean_shapley)):.4f}")
-    
-    filename = join(plot_folder, "shapley_game.png")
-    plot_horizontal_bar(
-        names=feature_names,
-        values=mean_shapley,
-        std=std_shapley,
-        title="Average Shapley Values (Game Representation)",
-        xlabel="Average Shapley Value",
-        filename=filename,
-        color="steelblue"
-    )
-    print("Saved game representation Shapley values plot to:", filename)
-
-
-def plot_interaction_matrix_game(feature_names, all_interaction_matrices, plot_folder):
-    """
-    Plot interaction matrix for game representation.
-    
-    Parameters
-    ----------
-    feature_names : list
-        Names of features
-    all_interaction_matrices : list of arrays
-        Interaction matrices from multiple runs
-    plot_folder : str
-        Folder to save the plot
-    """
-    if not all_interaction_matrices:
-        print("No game representation interaction matrices computed; skipping plot.")
-        return
-    
-    mean_interaction_matrix = np.mean(np.array(all_interaction_matrices), axis=0)
-    
-    # Print range information
-    print(f"Game representation interaction matrix range: {np.min(mean_interaction_matrix):.4f} to {np.max(mean_interaction_matrix):.4f}")
-    print(f"Game representation interaction average magnitude: {np.mean(np.abs(mean_interaction_matrix)):.4f}")
-    
-    # Create plot
-    plt.figure(figsize=(8, 6))
-    plt.imshow(mean_interaction_matrix, cmap="viridis", interpolation="nearest")
-    plt.colorbar(orientation="vertical", label="Interaction Value")
-    plt.xticks(range(len(feature_names)), feature_names, rotation=90, fontsize=12)
-    plt.yticks(range(len(feature_names)), feature_names, fontsize=12)
-    plt.title("Average Interaction Effects Matrix (Game Representation)", fontsize=16)
-    plt.tight_layout()
-    
-    # Save plot
-    plot_path = join(plot_folder, "interaction_matrix_game.png")
-    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print("Saved game representation interaction matrix plot to:", plot_path)
-
-
-# ============================================================================
-# Mobius representation visualization functions
-# ============================================================================
-
-def plot_shapley_mobius(feature_names, all_shapley_values, plot_folder):
-    """
-    Plot Shapley values for Mobius representation.
-    
-    Parameters
-    ----------
-    feature_names : list
-        Names of features
-    all_shapley_values : list of arrays
-        Shapley values from multiple runs
-    plot_folder : str
-        Folder to save the plot
-    """
-    if not all_shapley_values:
-        print("No Mobius representation Shapley values computed; skipping plot.")
-        return
-    
-    all_shapley_arr = np.vstack(all_shapley_values)
-    mean_shapley = np.mean(all_shapley_arr, axis=0)
-    std_shapley = np.std(all_shapley_arr, axis=0)
-    
-    # Print value range for verification
-    print(f"Mobius representation Shapley values range: {np.min(mean_shapley):.4f} to {np.max(mean_shapley):.4f}")
-    print(f"Mobius representation Shapley average magnitude: {np.mean(np.abs(mean_shapley)):.4f}")
-    
-    filename = join(plot_folder, "shapley_mobius.png")
-    plot_horizontal_bar(
-        names=feature_names,
-        values=mean_shapley,
-        std=std_shapley,
-        title="Average Shapley Values (Mobius Representation)",
-        xlabel="Average Shapley Value",
-        filename=filename,
-        color="darkorange"
-    )
-    print("Saved Mobius representation Shapley values plot to:", filename)
-
-
-def plot_interaction_matrix_mobius(feature_names, all_interaction_matrices, plot_folder):
-    """
-    Plot interaction matrix for Mobius representation.
-    
-    Parameters
-    ----------
-    feature_names : list
-        Names of features
-    all_interaction_matrices : list of arrays
-        Interaction matrices from multiple runs
-    plot_folder : str
-        Folder to save the plot
-    """
-    if not all_interaction_matrices:
-        print("No Mobius representation interaction matrices computed; skipping plot.")
-        return
-    
-    mean_interaction_matrix = np.mean(np.array(all_interaction_matrices), axis=0)
-    
-    # Print range information
-    print(f"Mobius representation interaction matrix range: {np.min(mean_interaction_matrix):.4f} to {np.max(mean_interaction_matrix):.4f}")
-    print(f"Mobius representation interaction average magnitude: {np.mean(np.abs(mean_interaction_matrix)):.4f}")
-    
-    # Create plot
-    plt.figure(figsize=(8, 6))
-    plt.imshow(mean_interaction_matrix, cmap="plasma", interpolation="nearest")
-    plt.colorbar(orientation="vertical", label="Interaction Value")
-    plt.xticks(range(len(feature_names)), feature_names, rotation=90, fontsize=12)
-    plt.yticks(range(len(feature_names)), feature_names, fontsize=12)
-    plt.title("Average Interaction Effects Matrix (Mobius Representation)", fontsize=16)
-    plt.tight_layout()
-    
-    # Save plot
-    plot_path = join(plot_folder, "interaction_matrix_mobius.png")
-    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
-    plt.close()
-    print("Saved Mobius representation interaction matrix plot to:", plot_path)
-
-
-# ============================================================================
 # Shapley representation visualization functions
 # ============================================================================
 
-def plot_shapley_2add(feature_names, all_shapley_values, plot_folder):
+
+def plot_coefficients(feature_names, all_coefficients, plot_folder, k_add):
     """
-    Plot Shapley values for 2-additive Shapley representation.
-    
+    Plot model coefficients.
+
     Parameters
     ----------
     feature_names : list
         Names of features
-    all_shapley_values : list of arrays
-        Shapley values from multiple runs
+    all_coefficients : list of arrays
+        Coefficients from multiple runs
     plot_folder : str
         Folder to save the plot
+    k_add : int
+        k-additivity level
     """
-    if not all_shapley_values:
-        print("No 2-additive Shapley values computed; skipping plot.")
+    if not all_coefficients:
+        print("No coefficients computed; skipping plot.")
         return
     
-    all_shapley_arr = np.vstack(all_shapley_values)
-    mean_shapley = np.mean(all_shapley_arr, axis=0)
-    std_shapley = np.std(all_shapley_arr, axis=0)
+    all_coeffs_arr = np.vstack(all_coefficients)
+    mean_coeffs = np.mean(all_coeffs_arr, axis=0)
+    std_coeffs = np.std(all_coeffs_arr, axis=0)
     
     # Print value range for verification
-    print(f"2-additive Shapley values range: {np.min(mean_shapley):.4f} to {np.max(mean_shapley):.4f}")
-    print(f"2-additive Shapley average magnitude: {np.mean(np.abs(mean_shapley)):.4f}")
+    print(f"Coefficients values range: {np.min(mean_coeffs):.4f} to {np.max(mean_coeffs):.4f}")
+    print(f"Coefficients average magnitude: {np.mean(np.abs(mean_coeffs)):.4f}")
     
-    filename = join(plot_folder, "shapley_2add.png")
+    filename = join(plot_folder, f"coefficients_k{k_add}.png")
     plot_horizontal_bar(
         names=feature_names,
-        values=mean_shapley,
-        std=std_shapley,
-        title="Average Shapley Values (2-additive Shapley Representation)",
-        xlabel="Average Shapley Value",
+        values=mean_coeffs,
+        std=std_coeffs,
+        title=f"Average Model Coefficients (k={k_add})",
+        xlabel="Average Coefficient Value",
         filename=filename,
         color="seagreen"
     )
-    print("Saved 2-additive Shapley values plot to:", filename)
+    print("Saved coefficients plot to:", filename)
 
 
 def plot_interaction_matrix_2add(feature_names, all_interaction_matrices, plot_folder):
@@ -319,7 +160,6 @@ def plot_interaction_matrix_2add(feature_names, all_interaction_matrices, plot_f
     plt.savefig(plot_path, dpi=300, bbox_inches="tight")
     plt.close()
     print("Saved 2-additive Shapley interaction matrix plot to:", plot_path)
-
 
 # ============================================================================
 # General visualization functions

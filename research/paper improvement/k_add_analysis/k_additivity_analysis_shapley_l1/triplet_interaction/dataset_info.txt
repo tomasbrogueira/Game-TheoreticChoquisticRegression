@@ -1,6 +1,0 @@
-Dataset: triplet_interaction
-Representation: shapley
-Number of samples: 1000
-Number of attributes: 15
-Train samples: 700
-Test samples: 300

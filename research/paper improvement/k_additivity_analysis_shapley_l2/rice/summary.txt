@@ -1,0 +1,20 @@
+K-ADDITIVITY ANALYSIS SUMMARY FOR rice (shapley)
+============================================================
+
+Dataset: rice
+Representation: shapley
+Number of attributes: 7
+Number of samples: 4360
+
+OPTIMAL K VALUES:
+- Best k for accuracy: 1 (accuracy: 0.9251)
+- Best k for noise robustness: 1 (accuracy at noise 0.3: 0.9190, std: 0.0060)
+FULL RESULTS TABLE:
+  k_value n_params train_time baseline_accuracy noise_0.1 noise_0.2 noise_0.3 noise_0.1_std noise_0.2_std noise_0.3_std
+1       1        8   0.003057          0.925076  0.922171  0.921254   0.91896      0.001633      0.001675         0.006
+2       2       29   0.004505          0.925076  0.923394  0.918349  0.916667      0.002388      0.004254       0.00352
+3       3       64    0.01036          0.922783  0.922477  0.916972  0.918502       0.00197      0.004395      0.003371
+4       4       99    0.01565          0.922783  0.923089  0.920183   0.91055      0.003004       0.00344      0.002735
+5       5      120   0.023654          0.922018  0.923547   0.91896  0.916055      0.002512       0.00335      0.003398
+6       6      127   0.026996          0.922783  0.922324  0.917125  0.916361      0.001498      0.004703      0.003081
+7       7      128    0.02871          0.922783   0.92156  0.914679  0.913761      0.002844      0.002247      0.003258

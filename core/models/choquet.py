@@ -165,41 +165,6 @@ def choquet_k_additive_game(X_orig, k_add=None, full=False):
     return T_full
 
 
-def choquet_matrix_2add(X_orig):
-    """
-    Compute the 2-additive Choquet integral transformation using Shapley representation.
-    
-    In a 2-additive Choquet integral, the formula is:
-    f_CI(v, x_i) = ∑_j x_i,j(φ_j^S - (1/2)∑_{j'≠j} I_{j,j'}^S) + ∑_{j≠j'} (x_i,j ∧ x_i,j') I_{j,j'}^S
-    
-    Parameters:
-    -----------
-    X_orig : array-like
-        Original feature matrix
-        
-    Returns:
-    --------
-    numpy.ndarray : 2-additive Choquet integral basis transformation using Shapley representation
-    """
-    X_orig = np.array(X_orig)
-    nSamp, nAttr = X_orig.shape
-    k_add = 2
-    k_add_numb = nParam_kAdd(k_add, nAttr)
-    coalit = np.zeros((k_add_numb, nAttr))
-    for i, s in enumerate(powerset(range(nAttr), k_add)):
-        s = list(s)
-        coalit[i, s] = 1
-    data_opt = np.zeros((nSamp, k_add_numb))
-    for i in range(nAttr):
-        data_opt[:, i+1] = data_opt[:, i+1] + X_orig[:, i]
-        for i2 in range(i+1, nAttr):
-            data_opt[:, (coalit[:, [i, i2]]==1).all(axis=1)] = (np.min([X_orig[:, i], X_orig[:, i2]], axis=0)).reshape(nSamp, 1)
-        for ii in range(nAttr+1, len(coalit)):
-            if coalit[ii, i] == 1:
-                data_opt[:, ii] = data_opt[:, ii] + (-1/2)*X_orig[:, i]
-    return data_opt[:, 1:]
-
-
 # =============================================================================
 # ChoquetTransformer Class
 # =============================================================================
@@ -211,14 +176,9 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
     - Choquet integral 
         - k-additive Choquet integral with game representation
         - k-additive Choquet integral with Möbius representation
-        - 2-additive Choquet integral with shapely representation
     
     Parameters
     ----------
-    method : str, default="choquet_2add"
-        The transformation method. Options:
-        - "choquet": General Choquet integral
-        - "choquet_2add": 2-additive Choquet integral shapely representation
     representation : str, default="game"
         For method="choquet", defines the representation to use:
         - "game": Uses game-based representation
@@ -226,24 +186,14 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         Ignored for other methods.
     k_add : int or None, default=None
         Additivity level for k-additive models. If not specified and method is 
-        "choquet", defaults to using all features. Ignored for methods ending 
-        with "_2add" (where k_add=2 is implicit).
+        "choquet", defaults to using all features.
     """
 
-    def __init__(self, method="choquet_2add", representation="game", k_add=None):
-        self.method = method
+    def __init__(self, representation="game", k_add=None):
         self.representation = representation
         self.k_add = k_add
         
-        valid_methods = ["choquet", "choquet_2add"]
-        if method not in valid_methods:
-            raise ValueError(f"Method must be one of {valid_methods}")
-        if method == "choquet":
-            valid_representations = ["game", "mobius"]
-            if representation not in valid_representations:
-                raise ValueError(f"For method='choquet', representation must be one of {valid_representations}")
-            
-        valid_representations = ["game", "mobius"]
+        valid_representations = ["game", "mobius", "shapley"]
         if representation not in valid_representations:
             raise ValueError(f"Representation must be one of {valid_representations}")
     
@@ -305,15 +255,12 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         if X.shape[1] != self.n_features_in_:
             raise ValueError(f"X has {X.shape[1]} features, but expected {self.n_features_in_}.")
         
-        if self.method == "choquet":
-            if self.representation == "game":
-                return choquet_k_additive_game(X, k_add=self.k_add)
-            elif self.representation == "mobius":
-                return choquet_k_additive_mobius(X, k_add=self.k_add)
-            else:
-                raise ValueError(f"Unknown representation: {self.representation}")
-        elif self.method == "choquet_2add":
-            return choquet_matrix_2add(X)
+        if self.representation == "game":
+            return choquet_k_additive_game(X, k_add=self.k_add)
+        elif self.representation == "mobius":
+            return choquet_k_additive_mobius(X, k_add=self.k_add)
+        elif self.representation == "shapley":
+            return choquet_k_additive_shapley(X, k_add=self.k_add)
         else:
-            raise ValueError(f"Unknown method: {self.method}")
+            raise ValueError(f"Unknown representation: {self.representation}")
 

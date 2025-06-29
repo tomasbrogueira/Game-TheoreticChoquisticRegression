@@ -3,4 +3,4 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR raisin (game)
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
 - Best k for accuracy efficiency: 2 (eff: 0.5075, params: 29)
-- Best k for noise robustness efficiency: 1 (eff: 0.4921, params: 8)
+- Best k for noise robustness efficiency: 1 (eff: 0.4774, params: 8)

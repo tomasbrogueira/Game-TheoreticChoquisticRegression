@@ -84,6 +84,8 @@ def direct_k_additivity_analysis(
         dataset_name = dataset
         X, y = func_read_data(dataset_name)
 
+    representation = representation.lower()
+
     print(f"\n{'='*80}\nAnalyzing dataset: {dataset_name}...\n{'='*80}")
 
     
@@ -130,7 +132,8 @@ def direct_k_additivity_analysis(
         'n_params', 
         'train_time', 
         'baseline_accuracy',
-        'noise_0.1', 'noise_0.2', 'noise_0.3'
+        'noise_0.1', 'noise_0.2', 'noise_0.3',
+        'noise_0.1_std', 'noise_0.2_std', 'noise_0.3_std'
     ]
     
     if bootstrap_stability:
@@ -187,6 +190,9 @@ def direct_k_additivity_analysis(
             y_pred = model.predict(X_test_choquet)
             baseline_acc = accuracy_score(y_test_values, y_pred)
             results_df.loc[k, 'baseline_accuracy'] = baseline_acc
+            results_df.loc[k, 'noise_0.1_std'] = 0
+            results_df.loc[k, 'noise_0.2_std'] = 0
+            results_df.loc[k, 'noise_0.3_std'] = 0
             print(f"- Baseline accuracy: {baseline_acc:.4f}")
             
             # Noise robustness testing
@@ -211,8 +217,10 @@ def direct_k_additivity_analysis(
                 
                 # Record average noise performance
                 avg_noise_acc = np.mean(noise_accuracies)
+                std_noise_acc = np.std(noise_accuracies)
                 results_df.loc[k, f'noise_{noise_level}'] = avg_noise_acc
-                print(f"  Noise level {noise_level}: accuracy = {avg_noise_acc:.4f}")
+                results_df.loc[k, f'noise_{noise_level}_std'] = std_noise_acc
+                print(f"  Noise level {noise_level}: accuracy = {avg_noise_acc:.4f}, std = {std_noise_acc:.4f}")
             
             # Bootstrap stability testing
             if bootstrap_stability:
@@ -378,7 +386,7 @@ def direct_k_additivity_analysis(
             
             f.write("OPTIMAL K VALUES:\n")
             f.write(f"- Best k for accuracy: {best_k_accuracy} (accuracy: {valid_results.loc[best_k_accuracy, 'baseline_accuracy']:.4f})\n")
-            f.write(f"- Best k for noise robustness: {best_k_noise03} (accuracy at noise 0.3: {valid_results.loc[best_k_noise03, 'noise_0.3']:.4f})\n")
+            f.write(f"- Best k for noise robustness: {best_k_noise03} (accuracy at noise 0.3: {valid_results.loc[best_k_noise03, 'noise_0.3']:.4f}, std: {valid_results.loc[best_k_noise03, 'noise_0.3_std']:.4f})\n")
             if bootstrap_stability:
                 f.write(f"- Best k for stability: {best_k_stability} (std dev: {valid_results.loc[best_k_stability, 'bootstrap_std']:.4f})\n\n")
             
@@ -954,18 +962,18 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
 if __name__ == "__main__":
 #if 1 == 0:
     base_X, base_y = func_read_data("pure_pairwise_interaction")
-    datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin',
+    datasets = ['dados_covid_sbpo_atual','rice',
                 ("pure_pairwise_interaction",base_X,base_y),
                 ]
     
     # Choose the representation type - can be "game", "mobius", or "shapley"
-    representations = ["shapley"]  # Options: 'game', 'mobius', 'shapley'
+    representations = ["Shapley"]  # Options: 'game', 'mobius', 'shapley'
     
     # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
-    regularizations = ['l2']
+    regularizations = [None, 'l1','l2']
 
     run_k_additivity = True
-    run_bootstrap_stability = True 
+    run_bootstrap_stability = False 
     run_feature_dropout = False
     max_features_to_drop = 1  
 

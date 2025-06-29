@@ -1,0 +1,4 @@
+dataset,n_attr,best_k_accuracy,max_accuracy,best_k_noise,noise_robustness
+dados_covid_sbpo_atual,9,7,0.69505222230693,4,0.6896775177250896
+rice,7,1,0.9250764525993884,1,0.918960244648318
+pure_pairwise_interaction,15,4,0.7266666666666667,4,0.7073333333333334

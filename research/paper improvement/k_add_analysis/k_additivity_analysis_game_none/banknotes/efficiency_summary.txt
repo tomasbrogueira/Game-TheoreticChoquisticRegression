@@ -3,4 +3,4 @@ COMPLEXITY-EFFICIENCY ANALYSIS FOR banknotes (game)
 
 OPTIMAL K VALUES FOR EFFICIENCY (performance/complexity tradeoff):
 - Best k for accuracy efficiency: 1 (eff: 0.8214, params: 6)
-- Best k for noise robustness efficiency: 1 (eff: 0.7829, params: 6)
+- Best k for noise robustness efficiency: 1 (eff: 0.7814, params: 6)
