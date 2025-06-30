@@ -239,51 +239,7 @@ plot_noise_robustness(
 )
 ```
 
-## Visualization (not yet functional for all basis)
-
-The project includes specialized visualization functions for each representation basis:
-
-### Game Representation
-
-```python
-from utils.visualization.plotting import plot_shapley_game, plot_interaction_matrix_game
-
-# Plot Shapley values for game representation
-plot_shapley_game(
-    feature_names=X.columns,
-    all_shapley_values=[shapley_values],  # List of Shapley values from multiple runs
-    plot_folder="results/visualization"
-)
-
-# Plot interaction matrix for game representation
-plot_interaction_matrix_game(
-    feature_names=X.columns,
-    all_interaction_matrices=[interaction_matrix],  # List of interaction matrices from multiple runs
-    plot_folder="results/visualization"
-)
-```
-
-### Mobius Representation
-
-```python
-from utils.visualization.plotting import plot_shapley_mobius, plot_interaction_matrix_mobius
-
-# Plot Shapley values for Mobius representation
-plot_shapley_mobius(
-    feature_names=X.columns,
-    all_shapley_values=[shapley_values],  # List of Shapley values from multiple runs
-    plot_folder="results/visualization"
-)
-
-# Plot interaction matrix for Mobius representation
-plot_interaction_matrix_mobius(
-    feature_names=X.columns,
-    all_interaction_matrices=[interaction_matrix],  # List of interaction matrices from multiple runs
-    plot_folder="results/visualization"
-)
-```
-
-### Shapley Representation
+## Visualization for Interpretability
 
 ```python
 from utils.visualization.plotting import plot_coefficients, plot_interaction_matrix
