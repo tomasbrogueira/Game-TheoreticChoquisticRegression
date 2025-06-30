@@ -103,6 +103,7 @@ Before running the examples, you need to place your datasets in the `data/` dire
 - `data_rice.xlsx`: Rice (Commeo and Osmancik) dataset
 - `diabetes.csv`: Diabetes (PIMA) dataset
 - `data_skin.csv`: Skin segmentation dataset
+- `pure_pairwise_interaction.csv`: Pure pairwise interaction dataset
 
 Copy these files from your original project to the `data/` directory.
 
