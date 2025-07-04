@@ -1,0 +1,19 @@
+K-ADDITIVITY ANALYSIS SUMMARY FOR transfusion (shapley)
+============================================================
+
+Dataset: transfusion
+Representation: shapley
+Number of attributes: 4
+Number of samples: 1140
+
+OPTIMAL K VALUES:
+- Best k for accuracy: 2 (accuracy: 0.7105)
+- Best k for noise robustness: 3 (accuracy at noise 0.3: 0.7058, std: 0.0129)
+- Best k for stability: 1 (std dev: 0.0230)
+
+FULL RESULTS TABLE:
+  k_value n_params train_time baseline_accuracy noise_0.1 noise_0.2 noise_0.3 noise_0.1_std noise_0.2_std noise_0.3_std bootstrap_mean bootstrap_std
+1       1        5   0.001006          0.707602  0.709942  0.709942  0.695906      0.002188       0.00932      0.007162       0.701978      0.023036
+2       2       11     0.0021          0.710526  0.707602  0.705263  0.701754      0.002615      0.015069      0.004893       0.710916      0.031806
+3       3       15   0.001001          0.707602  0.709942  0.711111  0.705848      0.008145      0.008555      0.012892       0.706081       0.03022
+4       4       16   0.002001          0.707602  0.708187  0.715205  0.697661      0.006769      0.007976      0.016395        0.70652      0.026774

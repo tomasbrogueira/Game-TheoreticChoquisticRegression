@@ -1,0 +1,19 @@
+K-ADDITIVITY ANALYSIS SUMMARY FOR mammographic (shapley)
+============================================================
+
+Dataset: mammographic
+Representation: shapley
+Number of attributes: 4
+Number of samples: 856
+
+OPTIMAL K VALUES:
+- Best k for accuracy: 2 (accuracy: 0.8093)
+- Best k for noise robustness: 2 (accuracy at noise 0.3: 0.8086, std: 0.0057)
+- Best k for stability: 1 (std dev: 0.0264)
+
+FULL RESULTS TABLE:
+  k_value n_params train_time baseline_accuracy noise_0.1 noise_0.2 noise_0.3 noise_0.1_std noise_0.2_std noise_0.3_std bootstrap_mean bootstrap_std
+1       1        5   0.002019          0.793774  0.795331  0.789883  0.795331      0.005824      0.007782      0.011699       0.790439      0.026449
+2       2       11      0.002          0.809339  0.809339  0.806226   0.80856       0.00348      0.009008      0.005719       0.812293        0.0269
+3       3       15   0.001001          0.809339   0.80856   0.81323  0.807004      0.004538      0.006961      0.004669       0.805756       0.02673
+4       4       16   0.001005          0.809339  0.807782  0.807782  0.807782      0.003968      0.006784      0.004669       0.809659      0.027826

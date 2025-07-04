@@ -1,0 +1,22 @@
+K-ADDITIVITY ANALYSIS SUMMARY FOR raisin (shapley)
+============================================================
+
+Dataset: raisin
+Representation: shapley
+Number of attributes: 7
+Number of samples: 900
+
+OPTIMAL K VALUES:
+- Best k for accuracy: 2 (accuracy: 0.8704)
+- Best k for noise robustness: 7 (accuracy at noise 0.3: 0.8519, std: 0.0110)
+- Best k for stability: 1 (std dev: 0.0211)
+
+FULL RESULTS TABLE:
+  k_value n_params train_time baseline_accuracy noise_0.1 noise_0.2 noise_0.3 noise_0.1_std noise_0.2_std noise_0.3_std bootstrap_mean bootstrap_std
+1       1        8      0.001          0.859259  0.856296   0.85037  0.844444      0.002772       0.00895      0.008446       0.850926      0.021135
+2       2       29   0.001999           0.87037  0.862963  0.854815  0.845926      0.007027      0.006372      0.006869       0.874537      0.023918
+3       3       64      0.003          0.862963  0.863704  0.858519  0.845185      0.004319      0.005926      0.015432       0.860556      0.022484
+4       4       99   0.005003          0.866667  0.861481  0.856296   0.85037      0.007258      0.007182      0.012081       0.865741      0.021675
+5       5      120    0.01551          0.862963  0.862963   0.85037  0.845926      0.005238      0.006018      0.009252       0.865648      0.021999
+6       6      127   0.011465          0.862963      0.86  0.857037  0.841481      0.006372      0.007258      0.006372       0.864074      0.026005
+7       7      128   0.008456          0.862963  0.861481  0.853333  0.851852      0.005024      0.006869      0.010987       0.868796      0.024014

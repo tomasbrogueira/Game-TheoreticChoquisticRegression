@@ -1,0 +1,6 @@
+Dataset: banknotes
+Representation: shapley
+Number of samples: 1522
+Number of attributes: 5
+Train samples: 1065
+Test samples: 457

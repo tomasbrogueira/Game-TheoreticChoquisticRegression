@@ -1,0 +1,63 @@
+\onecolumn
+\chapter{Supplementary Results}
+% Reminder: Ensure your LaTeX document has '\usepackage{booktabs}' and '\usepackage{adjustbox}'.
+
+\section{Overall Performance Summary}
+
+\subsection{Summary for Shapley L1}
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{lrrrl}
+\toprule
+Dataset & Best K Accuracy & Accuracy & Best K Robustness & Robustness Accuracy ($\Pm$ Std) \\
+\midrule
+dados\_covid\_sbpo\_atual & 6 & 0.6946 & 6 & 0.6901 $\pm$ 0.0009 \\
+pure\_pairwise\_interaction & 2 & 0.7400 & 6 & 0.7287 $\pm$ 0.0062 \\
+rice & 1 & 0.9228 & 3 & 0.9099 $\pm$ 0.0038 \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Summary of k-additivity analysis for shapley l1, generated from summary.txt files.}
+    \label{tab:summary_shapley_l1}
+\end{table}
+
+\subsection{Summary for Shapley L2}
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{lrrrl}
+\toprule
+Dataset & Best K Accuracy & Accuracy & Best K Robustness & Robustness Accuracy ($\Pm$ Std) \\
+\midrule
+dados\_covid\_sbpo\_atual & 7 & 0.6951 & 4 & 0.6897 $\pm$ 0.0008 \\
+pure\_pairwise\_interaction & 4 & 0.7267 & 4 & 0.7073 $\pm$ 0.0202 \\
+rice & 1 & 0.9251 & 1 & 0.9190 $\pm$ 0.0060 \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Summary of k-additivity analysis for shapley l2, generated from summary.txt files.}
+    \label{tab:summary_shapley_l2}
+\end{table}
+
+\subsection{Summary for Shapley None}
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{lrrrl}
+\toprule
+Dataset & Best K Accuracy & Accuracy & Best K Robustness & Robustness Accuracy ($\Pm$ Std) \\
+\midrule
+banknotes & 1 & 1.0000 & 1 & 1.0000 $\pm$ 0.0000 \\
+dados\_covid\_sbpo\_atual & 5 & 0.6951 & 3 & 0.6872 $\pm$ 0.0007 \\
+diabetes & 5 & 0.7933 & 4 & 0.7513 $\pm$ 0.0243 \\
+mammographic & 2 & 0.8171 & 2 & 0.8140 $\pm$ 0.0067 \\
+pure\_pairwise\_interaction & 2 & 0.7800 & 5 & 0.7427 $\pm$ 0.0114 \\
+raisin & 1 & 0.8593 & 1 & 0.7896 $\pm$ 0.0116 \\
+rice & 2 & 0.9266 & 7 & 0.8720 $\pm$ 0.0076 \\
+skin & 1 & 1.0000 & 1 & 0.9996 $\pm$ 0.0001 \\
+transfusion & 2 & 0.7281 & 3 & 0.7140 $\pm$ 0.0107 \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Summary of k-additivity analysis for shapley none, generated from summary.txt files.}
+    \label{tab:summary_shapley_none}
+\end{table}
+

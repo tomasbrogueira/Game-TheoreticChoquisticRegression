@@ -962,7 +962,7 @@ def feature_dropout_analysis(dataset_name, representation="game", output_dir=Non
 if __name__ == "__main__":
 #if 1 == 0:
     base_X, base_y = func_read_data("pure_pairwise_interaction")
-    datasets = ['dados_covid_sbpo_atual','rice',
+    datasets = ['dados_covid_sbpo_atual','banknotes','transfusion','mammographic','raisin','rice','diabetes','skin',
                 ("pure_pairwise_interaction",base_X,base_y),
                 ]
     
@@ -970,10 +970,10 @@ if __name__ == "__main__":
     representations = ["Shapley"]  # Options: 'game', 'mobius', 'shapley'
     
     # Choose regularization - options: 'l1', 'l2', 'elasticnet', 'none'
-    regularizations = [None, 'l1','l2']
+    regularizations = ['l2']
 
     run_k_additivity = True
-    run_bootstrap_stability = False 
+    run_bootstrap_stability = True 
     run_feature_dropout = False
     max_features_to_drop = 1  
 
