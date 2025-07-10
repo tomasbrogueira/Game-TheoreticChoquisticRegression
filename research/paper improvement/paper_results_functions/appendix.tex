@@ -1,63 +1,342 @@
 \onecolumn
 \chapter{Supplementary Results}
-% Reminder: Ensure your LaTeX document has '\usepackage{booktabs}' and '\usepackage{adjustbox}'.
+% Reminder: Ensure your LaTeX document has '\usepackage{booktabs}', '\usepackage{adjustbox}', and '\usepackage{amsmath}'.
 
 \section{Overall Performance Summary}
 
-\subsection{Summary for Shapley L1}
+This section summarizes the performance of the Choquistic regression model under different regularization settings (None, L1, L2). For each dataset, we report the k-value that achieves the highest accuracy, the k-value that provides the best stability under bootstrapping, and the k-value that shows the most robustness to noise in the input data. Accuracy values are presented as mean $\pm$ standard deviation.
+
 \begin{table}[htbp]
     \begin{adjustbox}{width=\textwidth,center}
-\begin{tabular}{lrrrl}
+\begin{tabular}{lrlrlrr}
 \toprule
-Dataset & Best K Accuracy & Accuracy & Best K Robustness & Robustness Accuracy ($\Pm$ Std) \\
+Dataset & Best K (Acc) & Accuracy ($\Pm$ Std) & Best K (Robust) & Robustness Accuracy ($\Pm$ Std) & Best K (Stab) & Bootstrap Stability (Std) \\
 \midrule
-dados\_covid\_sbpo\_atual & 6 & 0.6946 & 6 & 0.6901 $\pm$ 0.0009 \\
-pure\_pairwise\_interaction & 2 & 0.7400 & 6 & 0.7287 $\pm$ 0.0062 \\
-rice & 1 & 0.9228 & 3 & 0.9099 $\pm$ 0.0038 \\
+banknotes & 1 & 1.0000 \pm 0.0000 & 4 & 1.0000 \pm 0.0000 & 1 & 0.0000 \\
+dados\_covid\_sbpo\_atual & 6 & 0.6946 \pm 0.0034 & 8 & 0.6904 \pm 0.0008 & 1 & 0.0028 \\
+diabetes & 2 & 0.7733 \pm 0.0311 & 6 & 0.7653 \pm 0.0153 & 4 & 0.0230 \\
+mammographic & 2 & 0.8132 \pm 0.0261 & 3 & 0.8062 \pm 0.0103 & 4 & 0.0224 \\
+pure\_pairwise\_interaction & 2 & 0.7400 \pm 0.0222 & 7 & 0.7313 \pm 0.0120 & 2 & 0.0222 \\
+raisin & 2 & 0.8667 \pm 0.0207 & 5 & 0.8467 \pm 0.0127 & 5 & 0.0197 \\
+rice & 1 & 0.9228 \pm 0.0091 & 4 & 0.9072 \pm 0.0046 & 6 & 0.0068 \\
+skin & 1 & 1.0000 \pm 0.0000 & 4 & 0.9996 \pm 0.0000 & 1 & 0.0000 \\
+transfusion & 1 & 0.7135 \pm 0.0323 & 2 & 0.7070 \pm 0.0113 & 3 & 0.0267 \\
 \bottomrule
 \end{tabular}
     \end{adjustbox}
-    \caption{Summary of k-additivity analysis for shapley l1, generated from summary.txt files.}
+    \caption{Overall Performance Summary for Shapley L1}
     \label{tab:summary_shapley_l1}
 \end{table}
 
-\subsection{Summary for Shapley L2}
+\clearpage
+
 \begin{table}[htbp]
     \begin{adjustbox}{width=\textwidth,center}
-\begin{tabular}{lrrrl}
+\begin{tabular}{lrlrlrr}
 \toprule
-Dataset & Best K Accuracy & Accuracy & Best K Robustness & Robustness Accuracy ($\Pm$ Std) \\
+Dataset & Best K (Acc) & Accuracy ($\Pm$ Std) & Best K (Robust) & Robustness Accuracy ($\Pm$ Std) & Best K (Stab) & Bootstrap Stability (Std) \\
 \midrule
-dados\_covid\_sbpo\_atual & 7 & 0.6951 & 4 & 0.6897 $\pm$ 0.0008 \\
-pure\_pairwise\_interaction & 4 & 0.7267 & 4 & 0.7073 $\pm$ 0.0202 \\
-rice & 1 & 0.9251 & 1 & 0.9190 $\pm$ 0.0060 \\
+banknotes & 1 & 1.0000 \pm 0.0000 & 1 & 1.0000 \pm 0.0000 & 1 & 0.0000 \\
+dados\_covid\_sbpo\_atual & 7 & 0.6951 \pm 0.0027 & 6 & 0.6899 \pm 0.0008 & 4 & 0.0025 \\
+diabetes & 4 & 0.7667 \pm 0.0297 & 5 & 0.7667 \pm 0.0180 & 5 & 0.0241 \\
+mammographic & 2 & 0.8093 \pm 0.0269 & 2 & 0.8086 \pm 0.0057 & 1 & 0.0264 \\
+pure\_pairwise\_interaction & 4 & 0.7267 \pm 0.0273 & 4 & 0.7100 \pm 0.0135 & 11 & 0.0224 \\
+raisin & 2 & 0.8704 \pm 0.0239 & 7 & 0.8519 \pm 0.0110 & 1 & 0.0211 \\
+rice & 1 & 0.9251 \pm 0.0089 & 5 & 0.9165 \pm 0.0039 & 2 & 0.0075 \\
+skin & 1 & 1.0000 \pm 0.0000 & 1 & 0.9998 \pm 0.0000 & 1 & 0.0000 \\
+transfusion & 2 & 0.7105 \pm 0.0318 & 3 & 0.7058 \pm 0.0129 & 1 & 0.0230 \\
 \bottomrule
 \end{tabular}
     \end{adjustbox}
-    \caption{Summary of k-additivity analysis for shapley l2, generated from summary.txt files.}
+    \caption{Overall Performance Summary for Shapley L2}
     \label{tab:summary_shapley_l2}
 \end{table}
 
-\subsection{Summary for Shapley None}
+\clearpage
+
 \begin{table}[htbp]
     \begin{adjustbox}{width=\textwidth,center}
-\begin{tabular}{lrrrl}
+\begin{tabular}{lrlrlrr}
 \toprule
-Dataset & Best K Accuracy & Accuracy & Best K Robustness & Robustness Accuracy ($\Pm$ Std) \\
+Dataset & Best K (Acc) & Accuracy ($\Pm$ Std) & Best K (Robust) & Robustness Accuracy ($\Pm$ Std) & Best K (Stab) & Bootstrap Stability (Std) \\
 \midrule
-banknotes & 1 & 1.0000 & 1 & 1.0000 $\pm$ 0.0000 \\
-dados\_covid\_sbpo\_atual & 5 & 0.6951 & 3 & 0.6872 $\pm$ 0.0007 \\
-diabetes & 5 & 0.7933 & 4 & 0.7513 $\pm$ 0.0243 \\
-mammographic & 2 & 0.8171 & 2 & 0.8140 $\pm$ 0.0067 \\
-pure\_pairwise\_interaction & 2 & 0.7800 & 5 & 0.7427 $\pm$ 0.0114 \\
-raisin & 1 & 0.8593 & 1 & 0.7896 $\pm$ 0.0116 \\
-rice & 2 & 0.9266 & 7 & 0.8720 $\pm$ 0.0076 \\
-skin & 1 & 1.0000 & 1 & 0.9996 $\pm$ 0.0001 \\
-transfusion & 2 & 0.7281 & 3 & 0.7140 $\pm$ 0.0107 \\
+banknotes & 1 & 1.0000 \pm 0.0000 & 1 & 1.0000 \pm 0.0000 & 1 & 0.0000 \\
+dados\_covid\_sbpo\_atual & 5 & 0.6951 \pm 0.0036 & 3 & 0.6872 \pm 0.0007 & 4 & 0.0025 \\
+diabetes & 5 & 0.7933 \pm 0.0255 & 4 & 0.7513 \pm 0.0243 & 2 & 0.0231 \\
+mammographic & 2 & 0.8171 \pm 0.0270 & 2 & 0.8140 \pm 0.0067 & 1 & 0.0242 \\
+pure\_pairwise\_interaction & 2 & 0.7800 \pm 0.0251 & 4 & 0.7440 \pm 0.0142 & 10 & 0.0231 \\
+raisin & 1 & 0.8593 \pm 0.0216 & 1 & 0.7896 \pm 0.0116 & 5 & 0.0195 \\
+rice & 2 & 0.9266 \pm 0.0071 & 7 & 0.8720 \pm 0.0076 & 2 & 0.0071 \\
+skin & 1 & 1.0000 \pm 0.0000 & 1 & 0.9996 \pm 0.0001 & 1 & 0.0000 \\
+transfusion & 2 & 0.7281 \pm 0.0325 & 3 & 0.7140 \pm 0.0107 & 1 & 0.0230 \\
 \bottomrule
 \end{tabular}
     \end{adjustbox}
-    \caption{Summary of k-additivity analysis for shapley none, generated from summary.txt files.}
+    \caption{Overall Performance Summary for Shapley None}
     \label{tab:summary_shapley_none}
 \end{table}
+
+\clearpage
+
+\section{Detailed Noise Robustness Analysis}
+
+This section provides a detailed breakdown of model accuracy under different levels of noise for each dataset and k-value. Each table shows the accuracy for k-values 1-15 (rows) across different noise levels (columns), with format: accuracy $\pm$ standard deviation.
+
+\subsection{Robustness Analysis for Shapley L1}\n\n\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 0.6866 $\pm$ 0.0028 & 0.6867 $\pm$ 0.0003 & 0.6853 $\pm$ 0.0006 & 0.6836 $\pm$ 0.0007 \\
+2 & 0.6894 $\pm$ 0.0037 & 0.6897 $\pm$ 0.0006 & 0.6889 $\pm$ 0.0006 & 0.6874 $\pm$ 0.0008 \\
+3 & 0.6938 $\pm$ 0.0033 & 0.6930 $\pm$ 0.0002 & 0.6914 $\pm$ 0.0004 & 0.6880 $\pm$ 0.0013 \\
+4 & 0.6941 $\pm$ 0.0037 & 0.6942 $\pm$ 0.0005 & 0.6921 $\pm$ 0.0006 & 0.6896 $\pm$ 0.0014 \\
+5 & 0.6945 $\pm$ 0.0030 & 0.6941 $\pm$ 0.0003 & 0.6926 $\pm$ 0.0007 & 0.6897 $\pm$ 0.0012 \\
+6 & 0.6946 $\pm$ 0.0034 & 0.6945 $\pm$ 0.0002 & 0.6928 $\pm$ 0.0005 & 0.6893 $\pm$ 0.0012 \\
+7 & 0.6946 $\pm$ 0.0029 & 0.6944 $\pm$ 0.0004 & 0.6925 $\pm$ 0.0009 & 0.6901 $\pm$ 0.0009 \\
+8 & 0.6946 $\pm$ 0.0034 & 0.6942 $\pm$ 0.0002 & 0.6933 $\pm$ 0.0004 & 0.6904 $\pm$ 0.0008 \\
+9 & 0.6946 $\pm$ 0.0036 & 0.6947 $\pm$ 0.0002 & 0.6929 $\pm$ 0.0008 & 0.6898 $\pm$ 0.0009 \\
+10 & - & - & - & - \\
+11 & - & - & - & - \\
+12 & - & - & - & - \\
+13 & - & - & - & - \\
+14 & - & - & - & - \\
+15 & - & - & - & - \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Dados Covid Sbpo Atual with Shapley L1 Regularization}
+    \label{tab:robustness_shapley_l1_dadoscovidsbpoatual}
+\end{table}
+
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 0.4900 $\pm$ 0.0363 & 0.4867 $\pm$ 0.0060 & 0.4827 $\pm$ 0.0068 & 0.4853 $\pm$ 0.0134 \\
+2 & 0.7400 $\pm$ 0.0222 & 0.7447 $\pm$ 0.0045 & 0.7367 $\pm$ 0.0166 & 0.7200 $\pm$ 0.0132 \\
+3 & 0.7367 $\pm$ 0.0281 & 0.7347 $\pm$ 0.0016 & 0.7367 $\pm$ 0.0056 & 0.7180 $\pm$ 0.0113 \\
+4 & 0.7367 $\pm$ 0.0236 & 0.7387 $\pm$ 0.0065 & 0.7440 $\pm$ 0.0142 & 0.7180 $\pm$ 0.0171 \\
+5 & 0.7333 $\pm$ 0.0258 & 0.7453 $\pm$ 0.0160 & 0.7407 $\pm$ 0.0118 & 0.7193 $\pm$ 0.0127 \\
+6 & 0.7300 $\pm$ 0.0279 & 0.7493 $\pm$ 0.0085 & 0.7453 $\pm$ 0.0134 & 0.7307 $\pm$ 0.0173 \\
+7 & 0.7233 $\pm$ 0.0253 & 0.7413 $\pm$ 0.0078 & 0.7233 $\pm$ 0.0153 & 0.7313 $\pm$ 0.0120 \\
+8 & 0.7233 $\pm$ 0.0330 & 0.7347 $\pm$ 0.0086 & 0.7427 $\pm$ 0.0108 & 0.7087 $\pm$ 0.0215 \\
+9 & 0.7300 $\pm$ 0.0300 & 0.7407 $\pm$ 0.0150 & 0.7267 $\pm$ 0.0067 & 0.7173 $\pm$ 0.0104 \\
+10 & 0.7300 $\pm$ 0.0313 & 0.7280 $\pm$ 0.0096 & 0.7253 $\pm$ 0.0218 & 0.7233 $\pm$ 0.0103 \\
+11 & 0.7300 $\pm$ 0.0311 & 0.7367 $\pm$ 0.0123 & 0.7333 $\pm$ 0.0047 & 0.7120 $\pm$ 0.0332 \\
+12 & 0.7267 $\pm$ 0.0255 & 0.7320 $\pm$ 0.0075 & 0.7360 $\pm$ 0.0148 & 0.7160 $\pm$ 0.0195 \\
+13 & 0.7267 $\pm$ 0.0323 & 0.7387 $\pm$ 0.0145 & 0.7440 $\pm$ 0.0085 & 0.7220 $\pm$ 0.0083 \\
+14 & 0.7267 $\pm$ 0.0268 & 0.7407 $\pm$ 0.0116 & 0.7427 $\pm$ 0.0127 & 0.7260 $\pm$ 0.0108 \\
+15 & 0.7267 $\pm$ 0.0263 & 0.7347 $\pm$ 0.0081 & 0.7320 $\pm$ 0.0141 & 0.7293 $\pm$ 0.0137 \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Pure Pairwise Interaction with Shapley L1 Regularization}
+    \label{tab:robustness_shapley_l1_purepairwiseinteraction}
+\end{table}
+
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9995 $\pm$ 0.0000 \\
+2 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9996 $\pm$ 0.0001 \\
+3 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9995 $\pm$ 0.0000 \\
+4 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9996 $\pm$ 0.0000 \\
+5 & - & - & - & - \\
+6 & - & - & - & - \\
+7 & - & - & - & - \\
+8 & - & - & - & - \\
+9 & - & - & - & - \\
+10 & - & - & - & - \\
+11 & - & - & - & - \\
+12 & - & - & - & - \\
+13 & - & - & - & - \\
+14 & - & - & - & - \\
+15 & - & - & - & - \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Skin with Shapley L1 Regularization}
+    \label{tab:robustness_shapley_l1_skin}
+\end{table}
+
+\clearpage
+
+\subsection{Robustness Analysis for Shapley L2}\n\n\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 0.6866 $\pm$ 0.0029 & 0.6866 $\pm$ 0.0004 & 0.6855 $\pm$ 0.0005 & 0.6838 $\pm$ 0.0007 \\
+2 & 0.6895 $\pm$ 0.0030 & 0.6906 $\pm$ 0.0003 & 0.6891 $\pm$ 0.0005 & 0.6865 $\pm$ 0.0005 \\
+3 & 0.6938 $\pm$ 0.0033 & 0.6935 $\pm$ 0.0003 & 0.6913 $\pm$ 0.0006 & 0.6877 $\pm$ 0.0007 \\
+4 & 0.6944 $\pm$ 0.0025 & 0.6942 $\pm$ 0.0002 & 0.6926 $\pm$ 0.0007 & 0.6888 $\pm$ 0.0008 \\
+5 & 0.6948 $\pm$ 0.0036 & 0.6946 $\pm$ 0.0004 & 0.6927 $\pm$ 0.0010 & 0.6894 $\pm$ 0.0014 \\
+6 & 0.6949 $\pm$ 0.0034 & 0.6946 $\pm$ 0.0004 & 0.6936 $\pm$ 0.0007 & 0.6899 $\pm$ 0.0008 \\
+7 & 0.6951 $\pm$ 0.0027 & 0.6952 $\pm$ 0.0005 & 0.6934 $\pm$ 0.0011 & 0.6890 $\pm$ 0.0003 \\
+8 & 0.6951 $\pm$ 0.0030 & 0.6949 $\pm$ 0.0001 & 0.6919 $\pm$ 0.0007 & 0.6897 $\pm$ 0.0012 \\
+9 & 0.6951 $\pm$ 0.0032 & 0.6946 $\pm$ 0.0001 & 0.6932 $\pm$ 0.0006 & 0.6896 $\pm$ 0.0009 \\
+10 & - & - & - & - \\
+11 & - & - & - & - \\
+12 & - & - & - & - \\
+13 & - & - & - & - \\
+14 & - & - & - & - \\
+15 & - & - & - & - \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Dados Covid Sbpo Atual with Shapley L2 Regularization}
+    \label{tab:robustness_shapley_l2_dadoscovidsbpoatual}
+\end{table}
+
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 0.4967 $\pm$ 0.0329 & 0.4820 $\pm$ 0.0050 & 0.4900 $\pm$ 0.0087 & 0.4860 $\pm$ 0.0068 \\
+2 & 0.7100 $\pm$ 0.0274 & 0.7060 $\pm$ 0.0104 & 0.6887 $\pm$ 0.0113 & 0.6873 $\pm$ 0.0139 \\
+3 & 0.7200 $\pm$ 0.0291 & 0.7033 $\pm$ 0.0082 & 0.6927 $\pm$ 0.0090 & 0.6860 $\pm$ 0.0124 \\
+4 & 0.7267 $\pm$ 0.0273 & 0.7313 $\pm$ 0.0139 & 0.7140 $\pm$ 0.0068 & 0.7100 $\pm$ 0.0135 \\
+5 & 0.7133 $\pm$ 0.0268 & 0.7167 $\pm$ 0.0107 & 0.7067 $\pm$ 0.0087 & 0.6967 $\pm$ 0.0236 \\
+6 & 0.7167 $\pm$ 0.0245 & 0.7140 $\pm$ 0.0053 & 0.6967 $\pm$ 0.0194 & 0.7027 $\pm$ 0.0108 \\
+7 & 0.7133 $\pm$ 0.0309 & 0.7087 $\pm$ 0.0091 & 0.7047 $\pm$ 0.0105 & 0.6807 $\pm$ 0.0095 \\
+8 & 0.7067 $\pm$ 0.0271 & 0.7033 $\pm$ 0.0165 & 0.6920 $\pm$ 0.0185 & 0.6727 $\pm$ 0.0057 \\
+9 & 0.7033 $\pm$ 0.0265 & 0.6913 $\pm$ 0.0091 & 0.7040 $\pm$ 0.0057 & 0.6753 $\pm$ 0.0136 \\
+10 & 0.7033 $\pm$ 0.0272 & 0.7000 $\pm$ 0.0073 & 0.6893 $\pm$ 0.0110 & 0.6867 $\pm$ 0.0145 \\
+11 & 0.7033 $\pm$ 0.0224 & 0.6893 $\pm$ 0.0074 & 0.6893 $\pm$ 0.0093 & 0.6747 $\pm$ 0.0086 \\
+12 & 0.7067 $\pm$ 0.0256 & 0.6907 $\pm$ 0.0112 & 0.6873 $\pm$ 0.0083 & 0.6720 $\pm$ 0.0202 \\
+13 & 0.7067 $\pm$ 0.0286 & 0.6967 $\pm$ 0.0073 & 0.6800 $\pm$ 0.0067 & 0.6780 $\pm$ 0.0096 \\
+14 & 0.7067 $\pm$ 0.0272 & 0.7067 $\pm$ 0.0186 & 0.6913 $\pm$ 0.0128 & 0.6767 $\pm$ 0.0247 \\
+15 & 0.7067 $\pm$ 0.0309 & 0.6940 $\pm$ 0.0068 & 0.6933 $\pm$ 0.0110 & 0.6827 $\pm$ 0.0261 \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Pure Pairwise Interaction with Shapley L2 Regularization}
+    \label{tab:robustness_shapley_l2_purepairwiseinteraction}
+\end{table}
+
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9998 $\pm$ 0.0000 \\
+2 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9996 $\pm$ 0.0000 \\
+3 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9996 $\pm$ 0.0001 \\
+4 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9997 $\pm$ 0.0000 \\
+5 & - & - & - & - \\
+6 & - & - & - & - \\
+7 & - & - & - & - \\
+8 & - & - & - & - \\
+9 & - & - & - & - \\
+10 & - & - & - & - \\
+11 & - & - & - & - \\
+12 & - & - & - & - \\
+13 & - & - & - & - \\
+14 & - & - & - & - \\
+15 & - & - & - & - \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Skin with Shapley L2 Regularization}
+    \label{tab:robustness_shapley_l2_skin}
+\end{table}
+
+\clearpage
+
+\subsection{Robustness Analysis for Shapley None}\n\n\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 0.6866 $\pm$ 0.0029 & 0.6867 $\pm$ 0.0005 & 0.6855 $\pm$ 0.0006 & 0.6838 $\pm$ 0.0006 \\
+2 & 0.6895 $\pm$ 0.0030 & 0.6905 $\pm$ 0.0002 & 0.6891 $\pm$ 0.0005 & 0.6864 $\pm$ 0.0006 \\
+3 & 0.6939 $\pm$ 0.0033 & 0.6936 $\pm$ 0.0002 & 0.6911 $\pm$ 0.0005 & 0.6872 $\pm$ 0.0007 \\
+4 & 0.6946 $\pm$ 0.0025 & 0.6923 $\pm$ 0.0005 & 0.6878 $\pm$ 0.0004 & 0.6823 $\pm$ 0.0009 \\
+5 & 0.6951 $\pm$ 0.0036 & 0.6930 $\pm$ 0.0005 & 0.6880 $\pm$ 0.0017 & 0.6805 $\pm$ 0.0013 \\
+6 & 0.6939 $\pm$ 0.0032 & 0.6930 $\pm$ 0.0005 & 0.6881 $\pm$ 0.0013 & 0.6787 $\pm$ 0.0013 \\
+7 & 0.6941 $\pm$ 0.0027 & 0.6934 $\pm$ 0.0007 & 0.6876 $\pm$ 0.0007 & 0.6765 $\pm$ 0.0007 \\
+8 & 0.6941 $\pm$ 0.0031 & 0.6931 $\pm$ 0.0007 & 0.6873 $\pm$ 0.0006 & 0.6790 $\pm$ 0.0008 \\
+9 & 0.6943 $\pm$ 0.0031 & 0.6934 $\pm$ 0.0009 & 0.6893 $\pm$ 0.0013 & 0.6813 $\pm$ 0.0009 \\
+10 & - & - & - & - \\
+11 & - & - & - & - \\
+12 & - & - & - & - \\
+13 & - & - & - & - \\
+14 & - & - & - & - \\
+15 & - & - & - & - \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Dados Covid Sbpo Atual with Shapley None Regularization}
+    \label{tab:robustness_shapley_none_dadoscovidsbpoatual}
+\end{table}
+
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 0.4933 $\pm$ 0.0328 & 0.4853 $\pm$ 0.0062 & 0.4880 $\pm$ 0.0096 & 0.4853 $\pm$ 0.0088 \\
+2 & 0.7800 $\pm$ 0.0251 & 0.7720 $\pm$ 0.0034 & 0.7447 $\pm$ 0.0091 & 0.7347 $\pm$ 0.0302 \\
+3 & 0.7567 $\pm$ 0.0258 & 0.7647 $\pm$ 0.0072 & 0.7520 $\pm$ 0.0226 & 0.7433 $\pm$ 0.0156 \\
+4 & 0.7667 $\pm$ 0.0233 & 0.7587 $\pm$ 0.0107 & 0.7513 $\pm$ 0.0115 & 0.7440 $\pm$ 0.0142 \\
+5 & 0.7467 $\pm$ 0.0284 & 0.7340 $\pm$ 0.0090 & 0.7473 $\pm$ 0.0148 & 0.7353 $\pm$ 0.0207 \\
+6 & 0.7267 $\pm$ 0.0270 & 0.7420 $\pm$ 0.0138 & 0.7273 $\pm$ 0.0237 & 0.7320 $\pm$ 0.0216 \\
+7 & 0.7333 $\pm$ 0.0268 & 0.7433 $\pm$ 0.0056 & 0.7300 $\pm$ 0.0103 & 0.7093 $\pm$ 0.0110 \\
+8 & 0.7333 $\pm$ 0.0298 & 0.7340 $\pm$ 0.0142 & 0.7187 $\pm$ 0.0138 & 0.7087 $\pm$ 0.0131 \\
+9 & 0.7333 $\pm$ 0.0281 & 0.7253 $\pm$ 0.0069 & 0.7247 $\pm$ 0.0126 & 0.7080 $\pm$ 0.0105 \\
+10 & 0.7333 $\pm$ 0.0231 & 0.7327 $\pm$ 0.0125 & 0.7167 $\pm$ 0.0060 & 0.7080 $\pm$ 0.0187 \\
+11 & 0.7300 $\pm$ 0.0245 & 0.7313 $\pm$ 0.0100 & 0.7200 $\pm$ 0.0117 & 0.7080 $\pm$ 0.0189 \\
+12 & 0.7333 $\pm$ 0.0258 & 0.7153 $\pm$ 0.0129 & 0.7087 $\pm$ 0.0131 & 0.7007 $\pm$ 0.0200 \\
+13 & 0.7300 $\pm$ 0.0284 & 0.7313 $\pm$ 0.0131 & 0.7053 $\pm$ 0.0100 & 0.6967 $\pm$ 0.0092 \\
+14 & 0.7300 $\pm$ 0.0243 & 0.7367 $\pm$ 0.0165 & 0.7187 $\pm$ 0.0093 & 0.7007 $\pm$ 0.0150 \\
+15 & 0.7300 $\pm$ 0.0306 & 0.7220 $\pm$ 0.0086 & 0.7207 $\pm$ 0.0100 & 0.7087 $\pm$ 0.0284 \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Pure Pairwise Interaction with Shapley None Regularization}
+    \label{tab:robustness_shapley_none_purepairwiseinteraction}
+\end{table}
+
+\begin{table}[htbp]
+    \begin{adjustbox}{width=\textwidth,center}
+\begin{tabular}{rllll}
+\toprule
+K & Baseline & Noise 0.1 & Noise 0.2 & Noise 0.3 \\
+\midrule
+1 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9996 $\pm$ 0.0001 \\
+2 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9993 $\pm$ 0.0001 \\
+3 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9993 $\pm$ 0.0001 \\
+4 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 1.0000 $\pm$ 0.0000 & 0.9993 $\pm$ 0.0001 \\
+5 & - & - & - & - \\
+6 & - & - & - & - \\
+7 & - & - & - & - \\
+8 & - & - & - & - \\
+9 & - & - & - & - \\
+10 & - & - & - & - \\
+11 & - & - & - & - \\
+12 & - & - & - & - \\
+13 & - & - & - & - \\
+14 & - & - & - & - \\
+15 & - & - & - & - \\
+\bottomrule
+\end{tabular}
+    \end{adjustbox}
+    \caption{Noise Robustness Analysis: Skin with Shapley None Regularization}
+    \label{tab:robustness_shapley_none_skin}
+\end{table}
+
+\clearpage
 
