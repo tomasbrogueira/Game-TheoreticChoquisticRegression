@@ -1,0 +1,5 @@
+Dataset: diabetes
+Number of samples: 1000
+Number of attributes: 8
+Train samples: 700
+Test samples: 300
