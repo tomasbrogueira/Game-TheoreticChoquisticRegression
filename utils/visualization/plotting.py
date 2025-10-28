@@ -126,6 +126,9 @@ def plot_coefficients(feature_names, all_coefficients, plot_folder, k_add):
 def plot_interaction_matrix_2add_shapley(feature_names, coefs, plot_folder):
     """
     Plot interaction matrix for 2-additive Shapley model.
+    
+    Shows only pairwise interaction effects (diagonal = 0).
+    For individual feature effects, see plot_coefficients().
 
     Parameters
     ----------
@@ -139,11 +142,7 @@ def plot_interaction_matrix_2add_shapley(feature_names, coefs, plot_folder):
     n_features = len(feature_names)
     interaction_matrix = np.zeros((n_features, n_features))
     
-    # Fill diagonal with single feature effects
-    for i in range(n_features):
-        interaction_matrix[i, i] = coefs[i]
-    
-    # Fill off-diagonal with pairwise interactions
+    # Fill off-diagonal with pairwise interactions only
     idx = n_features
     for i in range(n_features):
         for j in range(i + 1, n_features):
@@ -153,11 +152,15 @@ def plot_interaction_matrix_2add_shapley(feature_names, coefs, plot_folder):
     
     # Create plot
     plt.figure(figsize=(10, 8))
-    im = plt.imshow(interaction_matrix, cmap="bwr", vmin=-np.max(np.abs(interaction_matrix)), vmax=np.max(np.abs(interaction_matrix)))
+    max_abs_val = np.max(np.abs(interaction_matrix))
+    if max_abs_val > 0:
+        im = plt.imshow(interaction_matrix, cmap="bwr", vmin=-max_abs_val, vmax=max_abs_val)
+    else:
+        im = plt.imshow(interaction_matrix, cmap="bwr")
     plt.colorbar(im, fraction=0.046, pad=0.04)
     plt.xticks(ticks=np.arange(n_features), labels=feature_names, rotation=90)
     plt.yticks(ticks=np.arange(n_features), labels=feature_names)
-    plt.title("Interaction Matrix (2-additive Shapley Model)", fontsize=14)
+    plt.title("Pairwise Interaction Matrix (2-additive Shapley Model)", fontsize=14)
     plt.tight_layout()
     
     # Save plot
