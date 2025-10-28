@@ -123,43 +123,49 @@ def plot_coefficients(feature_names, all_coefficients, plot_folder, k_add):
     print("Saved coefficients plot to:", filename)
 
 
-def plot_interaction_matrix_2add(feature_names, all_interaction_matrices, plot_folder):
+def plot_interaction_matrix_2add_shapley(feature_names, coefs, plot_folder):
     """
-    Plot interaction matrix for 2-additive Shapley representation.
-    
+    Plot interaction matrix for 2-additive Shapley model.
+
     Parameters
     ----------
     feature_names : list
         Names of features
-    all_interaction_matrices : list of arrays
-        Interaction matrices from multiple runs
+    coefs : array-like
+        Model coefficients
     plot_folder : str
         Folder to save the plot
     """
-    if not all_interaction_matrices:
-        print("No 2-additive Shapley interaction matrices computed; skipping plot.")
-        return
+    n_features = len(feature_names)
+    interaction_matrix = np.zeros((n_features, n_features))
     
-    mean_interaction_matrix = np.mean(np.array(all_interaction_matrices), axis=0)
+    # Fill diagonal with single feature effects
+    for i in range(n_features):
+        interaction_matrix[i, i] = coefs[i]
     
-    # Print range information
-    print(f"2-additive Shapley interaction matrix range: {np.min(mean_interaction_matrix):.4f} to {np.max(mean_interaction_matrix):.4f}")
-    print(f"2-additive Shapley interaction average magnitude: {np.mean(np.abs(mean_interaction_matrix)):.4f}")
+    # Fill off-diagonal with pairwise interactions
+    idx = n_features
+    for i in range(n_features):
+        for j in range(i + 1, n_features):
+            interaction_matrix[i, j] = coefs[idx]
+            interaction_matrix[j, i] = coefs[idx]
+            idx += 1
     
     # Create plot
-    plt.figure(figsize=(8, 6))
-    plt.imshow(mean_interaction_matrix, cmap="viridis", interpolation="nearest")
-    plt.colorbar(orientation="vertical", label="Interaction Value")
-    plt.xticks(range(len(feature_names)), feature_names, rotation=90, fontsize=12)
-    plt.yticks(range(len(feature_names)), feature_names, fontsize=12)
-    plt.title("Average Interaction Effects Matrix (2-additive Shapley)", fontsize=16)
+    plt.figure(figsize=(10, 8))
+    im = plt.imshow(interaction_matrix, cmap="bwr", vmin=-np.max(np.abs(interaction_matrix)), vmax=np.max(np.abs(interaction_matrix)))
+    plt.colorbar(im, fraction=0.046, pad=0.04)
+    plt.xticks(ticks=np.arange(n_features), labels=feature_names, rotation=90)
+    plt.yticks(ticks=np.arange(n_features), labels=feature_names)
+    plt.title("Interaction Matrix (2-additive Shapley Model)", fontsize=14)
     plt.tight_layout()
     
     # Save plot
-    plot_path = join(plot_folder, "interaction_matrix_2add.png")
-    plt.savefig(plot_path, dpi=300, bbox_inches="tight")
+    filename = join(plot_folder, "interaction_matrix_2add_shapley.png")
+    plt.savefig(filename, dpi=300, bbox_inches="tight")
     plt.close()
-    print("Saved 2-additive Shapley interaction matrix plot to:", plot_path)
+    print("Saved interaction matrix plot to:", filename)
+
 
 # ============================================================================
 # General visualization functions
