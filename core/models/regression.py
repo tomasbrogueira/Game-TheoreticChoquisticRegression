@@ -44,11 +44,21 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         Maximum number of iterations for logistic regression.
     random_state : int or None, default=None
         Random seed for logistic regression.
+    class_weight : dict, 'balanced' or None, default=None
+        Weights associated with classes in the form ``{class_label: weight}``.
+        If not given, all classes are supposed to have weight one.
+        
+        The "balanced" mode uses the values of y to automatically adjust
+        weights inversely proportional to class frequencies in the input data
+        as ``n_samples / (n_classes * np.bincount(y))``.
+        
+        Note that these weights will be multiplied with sample_weight (passed
+        through the fit method) if sample_weight is specified.
     """
 
     def __init__(self, representation="shapley", k_add=None,
                  scale_data=True, C=1.0, penalty='l2', solver='lbfgs',
-                 max_iter=1000, random_state=None):
+                 max_iter=1000, random_state=None, class_weight=None):
         self.representation = representation
         self.k_add = k_add
         self.scale_data = scale_data
@@ -57,6 +67,7 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         self.solver = solver
         self.max_iter = max_iter
         self.random_state = random_state
+        self.class_weight = class_weight
         
     def fit(self, X, y):
         """
@@ -108,7 +119,8 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
             penalty=self.penalty,
             solver=self.solver,
             max_iter=self.max_iter,
-            random_state=self.random_state
+            random_state=self.random_state,
+            class_weight=self.class_weight
         )
         self.model_.fit(X_transformed, y)
         
@@ -182,7 +194,8 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
             "penalty": self.penalty,
             "solver": self.solver,
             "max_iter": self.max_iter,
-            "random_state": self.random_state
+            "random_state": self.random_state,
+            "class_weight": self.class_weight
         }
     
     def set_params(self, **parameters):

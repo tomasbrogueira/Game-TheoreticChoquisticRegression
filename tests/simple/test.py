@@ -7,7 +7,7 @@ from sklearn.model_selection import train_test_split
 from core.models.regression import ChoquisticRegression
 from utils.visualization.plotting import (
 	plot_coefficients,
-	plot_interaction_matrix_2add_shapely,
+	plot_interaction_matrix_2add_shapley,
 	plot_horizontal_bar,
 	plot_model_performance_comparison,
 	plot_noise_robustness,
@@ -126,7 +126,7 @@ def choquistic_regression_test():
 	)
 	model_2add.fit(x_train, y_train)
 	
-	plot_interaction_matrix_2add_shapely(
+	plot_interaction_matrix_2add_shapley(
 		feature_names=feature_names,
 		coefs=model_2add.model_.coef_[0],
 		plot_folder=str(plot_folder),
