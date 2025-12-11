@@ -15,7 +15,7 @@ from core.models.regression import ChoquisticRegression
 from utils.data_loader import func_read_data
 from utils.visualization.plotting import (
     plot_coefficients,
-    plot_interaction_matrix_2add,
+    plot_interaction_matrix_2add_shapley,
     plot_model_performance_comparison,
     plot_noise_robustness,
     plot_k_additivity_results
@@ -113,20 +113,20 @@ def main():
 
     # Example for plot_coefficients
     if hasattr(model_shapley, 'coef_'):
-        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
+        feature_names_out = model_shapley.get_feature_names_out()
         plot_coefficients(
-            feature_names=feature_names,
+            feature_names=feature_names_out,
             all_coefficients=[model_shapley.coef_],
             plot_folder=output_folder,
             k_add=2 
         )
 
-    # Example for plot_interaction_matrix_2add
+    # Example for plot_interaction_matrix_2add_shapley
     if hasattr(model_shapley, 'interaction_matrix_'):
         feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-        plot_interaction_matrix_2add(
+        plot_interaction_matrix_2add_shapley(
             feature_names=feature_names,
-            all_interaction_matrices=[model_shapley.interaction_matrix_],
+            coefs=model_shapley.coef_.flatten(),
             plot_folder=output_folder
         )
     

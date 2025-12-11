@@ -264,3 +264,50 @@ class ChoquetTransformer(BaseEstimator, TransformerMixin):
         else:
             raise ValueError(f"Unknown representation: {self.representation}")
 
+    def get_feature_names_out(self, input_features=None):
+        """
+        Get output feature names for transformation.
+
+        Parameters
+        ----------
+        input_features : array-like of str or None, default=None
+            Input feature names.
+
+        Returns
+        -------
+        feature_names_out : ndarray of str objects
+            Transformed feature names.
+        """
+        from sklearn.utils.validation import check_is_fitted
+        check_is_fitted(self, ["n_features_in_"])
+
+        if input_features is None:
+            input_features = [f"x{i}" for i in range(self.n_features_in_)]
+        elif len(input_features) != self.n_features_in_:
+             raise ValueError("input_features must have the same length as the number of features")
+
+        k_add = self.k_add if self.k_add is not None else self.n_features_in_
+
+        if self.representation == "game":
+            # For game representation, we return features based on order statistics/diffs
+            # OR if full=False in choquet_k_additive_game, it returns n features.
+            # Looking at `choquet_k_additive_game` implementation above:
+            # if full=False (default), it returns matrix of shape (N, n)
+            # So output features are 1-to-1 with input features (but transformed)
+            return np.array(input_features)
+
+        elif self.representation in ["mobius", "shapley"]:
+            # Returns one feature per coalition A, |A|<=k_add
+            coalitions = []
+            for r in range(1, k_add+1):
+                coalitions += list(combinations(input_features, r))
+
+            feature_names = []
+            for coal in coalitions:
+                if len(coal) == 1:
+                    feature_names.append(str(coal[0]))
+                else:
+                    feature_names.append(f"{{{', '.join(map(str, coal))}}}")
+            return np.array(feature_names)
+
+        return np.array(input_features)
