@@ -183,7 +183,75 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         
         # Predict probabilities using the logistic regression model
         return self.model_.predict_proba(X_transformed)
+
+    @property
+    def coef_(self):
+        """Coefficients of the underlying logistic regression model."""
+        check_is_fitted(self, "model_")
+        return self.model_.coef_
+
+    @property
+    def intercept_(self):
+        """Intercept of the underlying logistic regression model."""
+        check_is_fitted(self, "model_")
+        return self.model_.intercept_
+
+    @property
+    def interaction_matrix_(self):
+        """
+        Interaction matrix for 2-additive models.
+
+        Only available for 2-additive models (k_add=2) or when the number of features is 2.
+        For Mobius and Shapley representations, this constructs the matrix from coefficients.
+        """
+        check_is_fitted(self, "model_")
+
+        # Currently only supporting 2-additive Shapley for automatic matrix construction
+        # to match the visualization utilities.
+        if self.representation != "shapley" or (self.k_add is not None and self.k_add != 2):
+             return None
+
+        n_features = self.transformer_.n_features_in_
+        coefs = self.model_.coef_.flatten()
+
+        # Construct interaction matrix similar to plotting utilities
+        interaction_matrix = np.zeros((n_features, n_features))
+
+        # Fill off-diagonal with pairwise interactions only
+        idx = n_features
+        # Ensure we have enough coefficients
+        if len(coefs) < n_features + (n_features * (n_features - 1)) // 2:
+            return None
+
+        for i in range(n_features):
+            for j in range(i + 1, n_features):
+                if idx < len(coefs):
+                    interaction_matrix[i, j] = coefs[idx]
+                    interaction_matrix[j, i] = coefs[idx]
+                    idx += 1
+
+        return interaction_matrix
     
+    def get_feature_names_out(self, input_features=None):
+        """
+        Get output feature names for transformation.
+
+        Parameters
+        ----------
+        input_features : array-like of str or None, default=None
+            Input feature names.
+
+        Returns
+        -------
+        feature_names_out : ndarray of str objects
+            Transformed feature names.
+        """
+        check_is_fitted(self, "transformer_")
+        if input_features is None and hasattr(self, "feature_names_"):
+            input_features = self.feature_names_
+
+        return self.transformer_.get_feature_names_out(input_features)
+
     def get_params(self, deep=True):
         """Get parameters for this estimator."""
         return {
