@@ -1,3 +1,3 @@
 """
-Tests module for PIC-I: Contains test cases and evaluation scripts.
+Tests module: Contains test cases and evaluation scripts.
 """

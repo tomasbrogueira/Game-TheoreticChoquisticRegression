@@ -1,8 +1,8 @@
 """
-Data loading and processing utilities for PIC-I.
+Data loading and processing utilities.
 
 This module provides functions for loading and preprocessing datasets
-used in the PIC-I project.
+used in the project.
 """
 
 import os

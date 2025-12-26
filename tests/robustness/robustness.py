@@ -1,5 +1,5 @@
 """
-Robustness testing utilities for PIC-I models.
+Robustness testing utilities for Choquet integral models.
 
 This module provides functions for testing the robustness of models
 under various perturbations such as noise, feature permutation,

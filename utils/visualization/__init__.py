@@ -1,3 +1,3 @@
 """
-Visualization utilities for PIC-I: Contains plotting functions for results and analysis.
+Visualization utilities: Contains plotting functions for results and analysis.
 """

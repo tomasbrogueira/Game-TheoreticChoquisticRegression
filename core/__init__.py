@@ -1,3 +1,3 @@
 """
-Core module for PIC-I: Game-theoretic extensions of logistic regression.
+Core module: Game-theoretic extensions of logistic regression.
 """

@@ -1,5 +1,5 @@
 """
-K-additivity analysis utilities for PIC-I models.
+K-additivity analysis utilities for Choquet integral models.
 
 This module provides functions for analyzing the impact of k-additivity
 on model performance, computational efficiency, and interpretability.

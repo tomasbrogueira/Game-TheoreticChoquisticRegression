@@ -1,5 +1,5 @@
 """
-Visualization utilities for PIC-I models.
+Visualization utilities for Choquet integral models.
 
 This module provides functions for visualizing model results, including:
 - Shapley values for different representations (game, Mobius, Shapley)

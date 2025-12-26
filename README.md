@@ -1,10 +1,10 @@
-# PIC-I: Game-theoretic Extensions of Logistic Regression
+# Game-theoretic Extensions of Logistic Regression
 
 This repository contains the implementation of game-theoretic extensions to logistic regression, focusing on the Choquet integral. The project aims to capture non-linear interactions between parameters while maintaining interpretability and efficiency of logistic regression models.
 
 ## Project Overview
 
-The PIC-I is my end of Bachelor's project. This project extends traditional logistic regression by incorporating the Choquet integral. This extension allows the model to capture complex non-linear interactions between features while preserving the interpretability advantages of logistic regression.
+This project extends traditional logistic regression by incorporating the Choquet integral. This extension allows the model to capture complex non-linear interactions between features while preserving the interpretability advantages of logistic regression.
 
 ### Key Features
 
@@ -16,7 +16,7 @@ The PIC-I is my end of Bachelor's project. This project extends traditional logi
 ## Repository Structure
 
 ```
-PIC-I/
+project/
 ├── core/                # Core implementation
 │   ├── models/          # Model implementations
 │   │   ├── choquet.py   # Choquet integral implementations
@@ -58,7 +58,7 @@ Each representation has its own interpretability properties and is suitable for 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/tomasbrogueira/Game-TheoreticChoquisticRegression.git
+git clone https://github.com/[anonymous]/Game-TheoreticChoquisticRegression.git
 cd Game-TheoreticChoquisticRegression
 ```
 
@@ -78,7 +78,7 @@ If you prefer not to install the package, you can still run the scripts by addin
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/tomasbrogueira/Game-TheoreticChoquisticRegression.git
+git clone https://github.com/[anonymous]/Game-TheoreticChoquisticRegression.git
 cd Game-TheoreticChoquisticRegression
 ```
 

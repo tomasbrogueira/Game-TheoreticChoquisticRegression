@@ -1,3 +1,3 @@
 """
-Robustness tests for PIC-I: Contains scripts for testing model robustness.
+Robustness tests: Contains scripts for testing model robustness.
 """

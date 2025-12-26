@@ -1,3 +1,3 @@
 """
-Examples module for PIC-I: Contains example scripts and usage demonstrations.
+Examples module: Contains example scripts and usage demonstrations.
 """

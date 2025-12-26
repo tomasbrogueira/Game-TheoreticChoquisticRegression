@@ -1,3 +1,3 @@
 """
-Utilities module for PIC-I: Contains helper functions and data processing utilities.
+Utilities module: Contains helper functions and data processing utilities.
 """

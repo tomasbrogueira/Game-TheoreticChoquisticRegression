@@ -1,4 +1,4 @@
-# PIC-I Requirements
+# Project Requirements
 
 # Core dependencies
 numpy>=1.20.0
