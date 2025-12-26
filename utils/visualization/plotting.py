@@ -170,6 +170,10 @@ def plot_interaction_matrix_2add_shapley(feature_names, coefs, plot_folder):
     print("Saved interaction matrix plot to:", filename)
 
 
+# Alias for backward compatibility
+plot_interaction_matrix_2add = plot_interaction_matrix_2add_shapley
+
+
 # ============================================================================
 # General visualization functions
 # ============================================================================

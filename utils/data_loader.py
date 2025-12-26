@@ -99,7 +99,7 @@ def func_read_data(data_imp):
     
     elif data_imp == "pure_pairwise_interaction":
         # Pure pairwise interaction dataset
-        file_path = os.path.join(data_dir, "pure_pairwise_interaction.csv")
+        file_path = os.path.join(data_dir, "pure_pairwise_interaction_dataset.csv")
         dataset = pd.read_csv(file_path, skiprows=2)
         X = dataset.iloc[:, :-1]
         y = dataset.iloc[:, -1].values

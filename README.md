@@ -48,9 +48,9 @@ PIC-I/
 
 The project is based on three different mathematical bases that are linearly related:
 
-1. **Game Representation**: The traditional representation of fuzzy measures with the caviat of having less restriction such as monotonicity.
-2. **Mobius Representation**: An alternative representation that directly captures the interaction between features.
-3. **Shapley Representation**: A representation that uses the shapely value and the pairwise interaction indices between features.
+1. **Game Representation**: The traditional representation of fuzzy measures with the caveat of having fewer restrictions such as monotonicity.
+2. **Möbius Representation**: An alternative representation that directly captures the interaction between features.
+3. **Shapley Representation**: A representation that uses the Shapley value and the pairwise interaction indices between features.
 
 Each representation has its own interpretability properties and is suitable for different types of analysis.
 
@@ -58,8 +58,8 @@ Each representation has its own interpretability properties and is suitable for 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/tomasbrogueira/PIC-I.git
-cd PIC-I
+git clone https://github.com/tomasbrogueira/Game-TheoreticChoquisticRegression.git
+cd Game-TheoreticChoquisticRegression
 ```
 
 2. Install the package in development mode:
@@ -78,8 +78,8 @@ If you prefer not to install the package, you can still run the scripts by addin
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/tomasbrogueira/PIC-I.git
-cd PIC-I-Organized
+git clone https://github.com/tomasbrogueira/Game-TheoreticChoquisticRegression.git
+cd Game-TheoreticChoquisticRegression
 ```
 
 2. Install required dependencies:
@@ -103,7 +103,7 @@ Before running the examples, you need to place your datasets in the `data/` dire
 - `data_rice.xlsx`: Rice (Commeo and Osmancik) dataset
 - `diabetes.csv`: Diabetes (PIMA) dataset
 - `data_skin.csv`: Skin segmentation dataset
-- `pure_pairwise_interaction.csv`: Pure pairwise interaction dataset
+- `pure_pairwise_interaction_dataset.csv`: Pure pairwise interaction dataset
 
 Copy these files from your original project to the `data/` directory.
 
@@ -243,20 +243,20 @@ plot_noise_robustness(
 ## Visualization for Interpretability
 
 ```python
-from utils.visualization.plotting import plot_coefficients, plot_interaction_matrix
+from utils.visualization.plotting import plot_coefficients, plot_interaction_matrix_2add
 
 # Plot model coefficients
 plot_coefficients(
-    feature_names=X.columns,
-    all_coefficients=[model_shapley.coef_],
+    feature_names=X.columns.tolist(),
+    all_coefficients=[model_shapley.coef_[0]],
     plot_folder="results/visualization",
     k_add=2
 )
 
-# Plot interaction matrix for Shapley representation
-plot_interaction_matrix(
-    feature_names=X.columns,
-    all_interaction_matrices=[interaction_matrix],  # List of interaction matrices from multiple runs
+# Plot interaction matrix for Shapley representation (2-additive model)
+plot_interaction_matrix_2add(
+    feature_names=X.columns.tolist(),
+    coefs=model_shapley.coef_[0],  # Coefficients from the fitted model
     plot_folder="results/visualization"
 )
 ```

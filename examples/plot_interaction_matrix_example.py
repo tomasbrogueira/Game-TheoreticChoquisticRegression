@@ -34,15 +34,14 @@ def main():
     os.makedirs(output_folder, exist_ok=True)
 
     # Plot interaction matrix
-    if hasattr(model_shapley, 'interaction_matrix_'):
-        print("\nGenerating interaction matrix plot...")
-        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-        plot_interaction_matrix_2add(
-            feature_names=feature_names,
-            all_interaction_matrices=[model_shapley.interaction_matrix_],
-            plot_folder=output_folder
-        )
-        print(f"Plot saved to '{output_folder}' directory.")
+    print("\nGenerating interaction matrix plot...")
+    feature_names = [f'feature_{i}' for i in range(X.shape[1])]
+    plot_interaction_matrix_2add(
+        feature_names=feature_names,
+        coefs=model_shapley.coef_[0],
+        plot_folder=output_folder
+    )
+    print(f"Plot saved to '{output_folder}' directory.")
 
 if __name__ == "__main__":
     main()

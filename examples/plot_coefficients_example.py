@@ -34,16 +34,15 @@ def main():
     os.makedirs(output_folder, exist_ok=True)
 
     # Plot coefficients
-    if hasattr(model_shapley, 'coef_'):
-        print("\nGenerating coefficients plot...")
-        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-        plot_coefficients(
-            feature_names=feature_names,
-            all_coefficients=[model_shapley.coef_],
-            plot_folder=output_folder,
-            k_add=2 
-        )
-        print(f"Plot saved to '{output_folder}' directory.")
+    print("\nGenerating coefficients plot...")
+    feature_names = [f'feature_{i}' for i in range(X.shape[1])]
+    plot_coefficients(
+        feature_names=feature_names,
+        all_coefficients=[model_shapley.coef_[0]],
+        plot_folder=output_folder,
+        k_add=2 
+    )
+    print(f"Plot saved to '{output_folder}' directory.")
 
 if __name__ == "__main__":
     main()

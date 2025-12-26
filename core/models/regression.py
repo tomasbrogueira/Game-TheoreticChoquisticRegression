@@ -54,11 +54,13 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         
         Note that these weights will be multiplied with sample_weight (passed
         through the fit method) if sample_weight is specified.
+    tol : float, default=1e-4
+        Tolerance for stopping criteria of logistic regression.
     """
 
     def __init__(self, representation="shapley", k_add=None,
                  scale_data=True, C=1.0, penalty='l2', solver='lbfgs',
-                 max_iter=1000, random_state=None, class_weight=None):
+                 max_iter=1000, random_state=None, class_weight=None, tol=1e-4):
         self.representation = representation
         self.k_add = k_add
         self.scale_data = scale_data
@@ -68,6 +70,7 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         self.max_iter = max_iter
         self.random_state = random_state
         self.class_weight = class_weight
+        self.tol = tol
         
     def fit(self, X, y):
         """
@@ -120,7 +123,8 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
             solver=self.solver,
             max_iter=self.max_iter,
             random_state=self.random_state,
-            class_weight=self.class_weight
+            class_weight=self.class_weight,
+            tol=self.tol
         )
         self.model_.fit(X_transformed, y)
         
@@ -184,6 +188,18 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
         # Predict probabilities using the logistic regression model
         return self.model_.predict_proba(X_transformed)
     
+    @property
+    def coef_(self):
+        """Get the coefficients of the underlying logistic regression model."""
+        check_is_fitted(self, ["model_"])
+        return self.model_.coef_
+    
+    @property
+    def intercept_(self):
+        """Get the intercept of the underlying logistic regression model."""
+        check_is_fitted(self, ["model_"])
+        return self.model_.intercept_
+    
     def get_params(self, deep=True):
         """Get parameters for this estimator."""
         return {
@@ -195,7 +211,8 @@ class ChoquisticRegression(BaseEstimator, ClassifierMixin):
             "solver": self.solver,
             "max_iter": self.max_iter,
             "random_state": self.random_state,
-            "class_weight": self.class_weight
+            "class_weight": self.class_weight,
+            "tol": self.tol
         }
     
     def set_params(self, **parameters):

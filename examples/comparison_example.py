@@ -112,23 +112,21 @@ def main():
     print("\nGenerating plots...")
 
     # Example for plot_coefficients
-    if hasattr(model_shapley, 'coef_'):
-        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-        plot_coefficients(
-            feature_names=feature_names,
-            all_coefficients=[model_shapley.coef_],
-            plot_folder=output_folder,
-            k_add=2 
-        )
+    feature_names = [f'feature_{i}' for i in range(X.shape[1])]
+    plot_coefficients(
+        feature_names=feature_names,
+        all_coefficients=[model_shapley.coef_[0]],
+        plot_folder=output_folder,
+        k_add=2 
+    )
 
-    # Example for plot_interaction_matrix_2add
-    if hasattr(model_shapley, 'interaction_matrix_'):
-        feature_names = [f'feature_{i}' for i in range(X.shape[1])]
-        plot_interaction_matrix_2add(
-            feature_names=feature_names,
-            all_interaction_matrices=[model_shapley.interaction_matrix_],
-            plot_folder=output_folder
-        )
+    # Example for plot_interaction_matrix_2add (using model coefficients)
+    # Note: This uses the Shapley model coefficients to visualize pairwise interactions
+    plot_interaction_matrix_2add(
+        feature_names=feature_names,
+        coefs=model_shapley.coef_[0],
+        plot_folder=output_folder
+    )
     
     # Create results dictionary for visualization
     results = {
@@ -178,7 +176,7 @@ def main():
             'k_value': k,
             'baseline_accuracy': acc,
             'train_time': 0, # Placeholder
-            'n_params': len(model.coef_)
+            'n_params': len(model.coef_[0])
         })
     results_df = pd.DataFrame(k_add_results)
     plot_k_additivity_results(
